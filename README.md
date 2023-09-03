@@ -1,6 +1,6 @@
 # MQL5-Bots
 
-This is a collection of bots, indicators and scripts in order to test and to get familiarized with the MQT5 language and MT5 usage.    
+This is a collection of bots, indicators and scripts in order to test and to get familiarized with the MQL5 language and MT5 usage.    
 It creates an isolated environment including all the resources inside the repository folder, therefore not following the MT5 default folder structure.    
 
 ## Install (Windows)
