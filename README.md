@@ -14,3 +14,13 @@ If you want to commit or push from the given path, it is likely that an addition
 `git config --global --add safe.directory C:\Users\{USER}\AppData\Roaming\MetaQuotes\Terminal\{CODE}\MQL5\Experts\MQL5-Bots`    
 
 
+## Utils
+
+### Backtest
+
+#### Backtest results
+After every backtest, a .csv with the details of the trades will be stored in this path:
+
+`C:\Users\{USER}\AppData\Roaming\MetaQuotes\Tester\{CODE}\Agent-127.0.0.1-3000\MQL5\Files`    
+
+The filename is not relevant, sort it by date to get the latest.
