@@ -1,3 +1,5 @@
+// Transcripted strategy from freqtrade: https://github.com/Xavopls/Comfy-Bot/blob/main/user_data/strategies/scotty.py
+
 #include <Trade/Trade.mqh>
 #include <Trade/AccountInfo.mqh>
 #property tester_everytick_calculate
@@ -11,6 +13,34 @@ float pos_size = 0.5;
 int bars_total;
 bool real_account_permitted = false;
 bool async_trading_permitted = false;
+int bb_handle;
+double bb_buffer[];
+int rsi_handle;
+double rsi_buffer[];
+int stoch_handle;
+double stoch_buffer[];
+int stoch_k;
+int stoch_d;
+int stoch_slowing;
+
+enum stoch_osc_type {
+   responsive, // Responsive (5,3,3)
+   mid_term,   // Mid term (21,7,7)
+   long_term,  // Long term (21,14,14)
+   pablito,    // Custom term (10,6,6)
+  };
+
+// Optimizable parameters
+input bool rsi_growing;                      // RSI Growing
+input bool operate_market_hours;             // Only Market hours
+input bool bullish_candle;                   // Current candle being bullish
+input bool weekend_trading;                  // Trading during weekends
+input double stoch_value_min;                // Stoch. Osc. Top
+input double stoch_value_max;                // Stoch. Osc. Bottom
+input double rsi_value_min;                  // RSI Top
+input double rsi_value_max;                  // RSI Bottom
+input stoch_osc_type osc_type = responsive;  // Stoch. Osc. Setup
+
 
 
 // Open long position
@@ -76,6 +106,7 @@ double GetSlLong(){
    return(0);
 }
 
+// Get TP of short position
 double GetTpShort(){
    return(0);
 }
@@ -110,12 +141,42 @@ int OnInit(){
    // Async trades setup
    trade.SetAsyncMode(async_trading_permitted);
 
-   // Init indicators
-   // ----
-   // ----
-   // ----
-   // ----
 
+   // Set up inputs
+   switch (osc_type){
+      case responsive:
+         stoch_k = 5;
+         stoch_d = 3;
+         stoch_slowing = 3;
+         break;
+
+      case mid_term:
+         stoch_k = 14;
+         stoch_d = 7;
+         stoch_slowing = 7;
+         break;
+
+      case long_term:
+         stoch_k = 5;
+         stoch_d = 3;
+         stoch_slowing = 3;
+         break;
+
+      case pablito:
+         stoch_k = 10;
+         stoch_d = 6;
+         stoch_slowing = 6;
+         break;
+
+      default:
+         break;
+      }
+
+   // Init indicators
+   rsi_handle = iRSI(Symbol(), Period(), 14, PRICE_CLOSE);
+   stoch_handle = iStochastic(Symbol(), Period(), stoch_k, stoch_d, stoch_slowing, MODE_SMA, STO_LOWHIGH);
+   bb_handle = iBands(Symbol(), Period(), 20, 0, 2, PRICE_CLOSE);
+   
    return(INIT_SUCCEEDED);
 }
 
