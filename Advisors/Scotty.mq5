@@ -9,12 +9,12 @@ CTrade trade;
 ulong pos_ticket;
 
 // Global variables
-float pos_size = 0.5;
 int bars_total;
 bool real_account_permitted = false;
 bool async_trading_permitted = false;
 int bb_handle;
-double bb_buffer[];
+double bb_upper_buffer[];
+double bb_lower_buffer[];
 int rsi_handle;
 double rsi_buffer[];
 int stoch_handle;
@@ -22,6 +22,7 @@ double stoch_buffer[];
 int stoch_k;
 int stoch_d;
 int stoch_slowing;
+double current_sl;
 
 enum stoch_osc_type {
    responsive, // Responsive (5,3,3)
@@ -31,15 +32,22 @@ enum stoch_osc_type {
   };
 
 // Optimizable parameters
-input bool rsi_growing;                      // RSI Growing
-input bool operate_market_hours;             // Only Market hours
-input bool bullish_candle;                   // Current candle being bullish
-input bool weekend_trading;                  // Trading during weekends
-input double stoch_value_min;                // Stoch. Osc. Top
-input double stoch_value_max;                // Stoch. Osc. Bottom
-input double rsi_value_min;                  // RSI Top
-input double rsi_value_max;                  // RSI Bottom
+input float pos_size = 0.5;                  // Pos size in lots
+input float sl_tp_ratio = 2;                 // SL/TP ratio
+input int last_candles_sl = 5;               // Candles count from last minimum (SL) 
+input bool operate_market_hours = false;     // Only Market hours
+input bool bullish_candle = false;           // Current candle being bullish
+input bool weekend_trading = false;          // Trading during weekends
+input double stoch_value_min = 5;            // Stoch. Osc. Top
+input double stoch_value_max = 20;           // Stoch. Osc. Bottom
+input double rsi_value_min = 15;             // RSI Top
+input double rsi_value_max = 35;             // RSI Bottom
 input stoch_osc_type osc_type = responsive;  // Stoch. Osc. Setup
+input int bb_length = 50;                    // BB length
+input float bb_std_dev = 2.5;                // BB Std. dev
+input int rsi_length = 14;                   // RSI length
+input bool rsi_growing = false;              // RSI Growing in last candle
+
 
 
 
@@ -98,12 +106,19 @@ string CheckPositionOpen(){
 
 // Get TP of long position
 double GetTpLong(){
-   return(0);
+   double avg_spread = (SymbolInfoDouble(Symbol(), SYMBOL_ASK) - SymbolInfoDouble(Symbol(), SYMBOL_BID)) / 2; 
+   double avg_price = (iHigh(Symbol(), Period(), 1) + iLow(Symbol(), Period(), 1)) / 2;
+   double sl_distance = avg_price - current_sl;
+   double tp = sl_tp_ratio * sl_distance + avg_price; 
+   return(tp + avg_spread);
 }
 
 // Get SL of long position
 double GetSlLong(){
-   return(0);
+   double avg_spread = (SymbolInfoDouble(Symbol(), SYMBOL_ASK) - SymbolInfoDouble(Symbol(), SYMBOL_BID)) / 2; 
+   double last_low = iLow(Symbol(), Period(), iLowest(Symbol(), Period(), MODE_LOW, last_candles_sl, 1));
+   current_sl = last_low - avg_spread;
+   return(current_sl);
 }
 
 // Get TP of short position
@@ -141,7 +156,6 @@ int OnInit(){
    // Async trades setup
    trade.SetAsyncMode(async_trading_permitted);
 
-
    // Set up inputs
    switch (osc_type){
       case responsive:
@@ -173,19 +187,36 @@ int OnInit(){
       }
 
    // Init indicators
-   rsi_handle = iRSI(Symbol(), Period(), 14, PRICE_CLOSE);
+   rsi_handle = iRSI(Symbol(), Period(), rsi_length, PRICE_CLOSE);
    stoch_handle = iStochastic(Symbol(), Period(), stoch_k, stoch_d, stoch_slowing, MODE_SMA, STO_LOWHIGH);
-   bb_handle = iBands(Symbol(), Period(), 20, 0, 2, PRICE_CLOSE);
-   
+   bb_handle = iBands(Symbol(), Period(), bb_length, 0, bb_std_dev, PRICE_CLOSE);
+
    return(INIT_SUCCEEDED);
 }
 
-
-
-
 void OnTick(){
    if(isNewBar()){
+      // Get price data and indicator values per tick
+      CopyBuffer(rsi_handle, 0, 0, 1, rsi_buffer);
+      CopyBuffer(stoch_handle, 0, 0, 1, stoch_buffer);
+      CopyBuffer(bb_handle, 1, 0, 1, bb_upper_buffer);
+      CopyBuffer(bb_handle, 2, 0, 1, bb_lower_buffer);
+      ArraySetAsSeries(stoch_buffer, true);
+      ArraySetAsSeries(bb_upper_buffer, true);
+      ArraySetAsSeries(bb_lower_buffer, true);
+      double high = iHigh(Symbol(),Period(), 1);
+      
+      // Check for open longs
+      if(bb_upper_buffer[0] < high &&
+         stoch_buffer[0] < stoch_value_max &&
+         stoch_buffer[0] > stoch_value_min && 
+         rsi_buffer[0] < rsi_value_max &&
+         rsi_buffer[0] > rsi_value_min) {
 
+         if(CheckPositionOpen() == "none"){
+            OpenLong("");
+         }
+      }
    }
 }
 
