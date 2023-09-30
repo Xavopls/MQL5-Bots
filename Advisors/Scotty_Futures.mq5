@@ -23,22 +23,13 @@ int stoch_k;
 int stoch_d;
 int stoch_slowing;
 double current_sl;
-
-enum stoch_osc_type {
-   responsive, // Responsive (5,3,3)
-   mid_term,   // Mid term (21,7,7)
-   long_term,  // Long term (21,14,14)
-   pablito,    // Custom term (10,6,6)
-  };
+double pos_size = 0.1;
 
 // Optimizable parameters
-input float pos_size = 0.5;                  // Pos size in lots
 input int bb_length = 20;                    // BB length
 input double bb_std_dev = 2.2;               // BB Std. dev
-input int _tp = 10;                          // TP in $$
-input int _sl = 18;                          // SL in $$
-
-
+input double tp_percentage = 6.9;            // TP in %
+input double sl_percentage = 4;              // SL in %
 
 // Open long position
 void OpenLong(string comment){
@@ -91,13 +82,15 @@ string CheckPositionOpen(){
 // Get TP of long position
 double GetTpLong(){
    double avg_price = (iHigh(Symbol(), Period(), 1) + iLow(Symbol(), Period(), 1)) / 2;
-   return(avg_price + _tp);
+   double tp = avg_price * (1 + tp_percentage * 0.01); 
+   return(tp);
 }
 
 // Get SL of long position
 double GetSlLong(){
    double avg_price = (iHigh(Symbol(), Period(), 1) + iLow(Symbol(), Period(), 1)) / 2;
-   return(avg_price - _sl);
+   double sl = avg_price * (1 - sl_percentage * 0.01);
+   return(sl);
 }
 
 // Get TP of short position
