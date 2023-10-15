@@ -8,17 +8,18 @@ ulong pos_ticket;
 
 // Global variables
 float pos_size = 0.5;
-int bars_total;
+string asset = Symbol();
+ENUM_TIMEFRAMES period = Period();
 bool real_account_permitted = false;
 bool async_trading_permitted = false;
-
+int bars_total;
 
 // Open long position
 void OpenLong(string comment){
    double sl = GetSlLong();
    double tp = GetTpLong();
-   double ask = SymbolInfoDouble(Symbol(), SYMBOL_ASK);
-   trade.Buy(pos_size, Symbol(), ask, sl, tp, comment);
+   double ask = SymbolInfoDouble(asset, SYMBOL_ASK);
+   trade.Buy(pos_size, asset, ask, sl, tp, comment);
    pos_ticket = trade.ResultOrder();
 }
 
@@ -26,8 +27,8 @@ void OpenLong(string comment){
 void OpenShort(string comment){
    double sl = GetSlShort(); 
    double tp = GetTpShort();
-   double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
-   trade.Sell(pos_size, Symbol(), bid, sl, 0, comment);
+   double bid = SymbolInfoDouble(asset, SYMBOL_BID);
+   trade.Sell(pos_size, asset, bid, sl, 0, comment);
    pos_ticket = trade.ResultOrder();
 }
 
@@ -37,9 +38,19 @@ void CloseOrder(){
    pos_ticket = 0;   
 }
 
+// Check close long
+void CheckExitLong(){
+
+}
+
+// Check close long
+void CheckExitShort(){
+
+}
+
 // Check if last bar is completed, eg. new bar created
 bool isNewBar(){
-   int bars = iBars(Symbol(), PERIOD_CURRENT);
+   int bars = iBars(asset, PERIOD_CURRENT);
    if(bars_total != bars){
       bars_total = bars;
       return(true);
