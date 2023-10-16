@@ -1,5 +1,34 @@
 /*
-SPY - 1h
+-------------------------------------------------------
+SPY
+-------------------------------------------------------
+
+- Long
+   - 1h EMA 30 > 1h EMA 65 > 1h EMA 100 > 1h EMA 200 
+   - 1h Low[2] < 1h EMA 200
+   - 1h Close > 1h EMA 200
+
+- TP
+   - Daily RSI decreasing
+   - RSI Daily[2] > X Value
+- SL
+   - Minimum of last X 1h candles
+
+-------------------------------------------------------
+
+- Short
+   - 4h MACD line and Signal line decreasing
+   - 4h MACD Line < 4h Signal line
+   - 1h EMA 65 decreasing
+   - 4h MACD line > X level (Y last candles ej 10)
+
+- SL
+   - Maximum of last X 1h candles
+
+- TP 
+   - 1h RSI Below X Level
+   - 1h RSI growing
+-------------------------------------------------------
 */
 
 #include <Trade/Trade.mqh>
@@ -24,18 +53,32 @@ int ema_30_handle;
 int ema_65_handle; 
 int ema_100_handle;
 int ema_200_handle;
-int rsi_handle;
+int macd_handle_4h;
+int rsi_handle_1d;
+int rsi_handle_1h;
+
 double ema_30_buffer[]; 
 double ema_65_buffer[]; 
 double ema_100_buffer[];
 double ema_200_buffer[];
-double rsi_buffer[];
+double macd_buffer_4h[];
+double macd_buffer_signal_4h[];
+double rsi_buffer_1d[];
+double rsi_buffer_1h[];
 
 // Inputs
-input int last_min_candles = 7;      // Latest min in terms of candles
-input double rsi_tp_value = 65;      // Max RSI tp value
 
+// Long
+sinput bool long_allowed = true;          // Long allowed
+input int last_min_candles_sl_long = 7;   // Long Latest min in terms of candles
+input double rsi_value_tp_long = 65;      // Long Max RSI tp value
 
+// Short
+sinput bool short_allowed = true;         // Short allowed
+input double macd_level_short = 5.0;      // Short Enter MACD level
+input int last_max_candles_sl_short = 7;  // Short Latest min in terms of candles
+input int last_max_candles_macd = 10;     // Short Last X candles to check max MACD
+input double rsi_value_tp_short = 10;     // Short Max RSI tp value
 
 // Open long position
 void OpenLong(string comment){
@@ -64,10 +107,10 @@ void CloseOrder(){
 // Check close long
 void CheckExitLong(){
    // Check if we have enough daily data to close the trade
-   if(ArraySize(rsi_buffer) >= 3){
+   if(ArraySize(rsi_buffer_1d) >= 3){
       // Check TP
-      if(rsi_buffer[2] > rsi_buffer[1] &&
-         rsi_buffer[2] > rsi_tp_value){
+      if(rsi_buffer_1d[2] > rsi_buffer_1d[1] &&
+         rsi_buffer_1d[2] > rsi_value_tp_long){
             closeAllOrders();
       }
    }
@@ -75,11 +118,13 @@ void CheckExitLong(){
 
 // Check close long
 void CheckExitShort(){
-
+   if(rsi_buffer_1h[1] < rsi_value_tp_short &&
+      rsi_buffer_1h[2] < rsi_buffer_1h[1]){
+         closeAllOrders();
+   }
 }
 
 void closeAllOrders(){
-   //--Đóng Positions
    for(int i = PositionsTotal() - 1; i >= 0; i--) // loop all Open Positions
       if(position.SelectByIndex(i))  // select a position
         {
@@ -121,6 +166,10 @@ double getLastMin(int candles){
    return(iLow(Symbol(), Period(), iLowest(Symbol(), Period(), MODE_LOW, candles, 1)));
 }
 
+double getLastMax(int candles){
+   return(iHigh(Symbol(), Period(), iHighest(Symbol(), Period(), MODE_HIGH, candles, 1)));
+}
+
 // Check if position is open, only works with 1 position opened max
 string CheckPositionOpen(){
    PositionSelectByTicket(pos_ticket);
@@ -142,13 +191,12 @@ string CheckPositionOpen(){
 
 // Get TP of long position
 double GetTpLong(){
-
    return(0);
 }
 
 // Get SL of long position
 double GetSlLong(){
-   return(getLastMin(last_min_candles));
+   return(getLastMin(last_min_candles_sl_long));
 }
 
 double GetTpShort(){
@@ -157,7 +205,7 @@ double GetTpShort(){
 
 // Get SL of short position
 double GetSlShort(){
-   return(0);
+   return(getLastMax(last_max_candles_sl_short));
 }
 
 // Check is account is real or demo
@@ -191,13 +239,13 @@ int OnInit(){
    ema_100_handle = iMA(asset, period, 100, 0, MODE_EMA, PRICE_CLOSE);
    ema_200_handle = iMA(asset, period, 200, 0, MODE_EMA, PRICE_CLOSE);
 
-   rsi_handle = iRSI(asset, PERIOD_D1, 14, PRICE_CLOSE);
+   macd_handle_4h = iMACD(asset, PERIOD_H4, 12, 26, 9, PRICE_CLOSE);
+
+   rsi_handle_1h = iRSI(asset, period, 14, PRICE_CLOSE);
+   rsi_handle_1d = iRSI(asset, PERIOD_D1, 14, PRICE_CLOSE);
    
    return(INIT_SUCCEEDED);
 }
-
-
-
 
 void OnTick(){
 
@@ -205,30 +253,49 @@ void OnTick(){
 
       // Set up indicator values
       if(TimeToString(TimeCurrent(), TIME_MINUTES)== "16:00"){
-         CopyBuffer(rsi_handle, 0, 0, 3, rsi_buffer);
+         CopyBuffer(rsi_handle_1d, 0, 0, 3, rsi_buffer_1d);
       }
 
       CopyBuffer(ema_30_handle, 0, 0, 3, ema_30_buffer);
       CopyBuffer(ema_65_handle, 0, 0, 3, ema_65_buffer);
       CopyBuffer(ema_100_handle, 0, 0, 3, ema_100_buffer);
       CopyBuffer(ema_200_handle, 0, 0, 3, ema_200_buffer);
+      CopyBuffer(rsi_handle_1h, 0, 0, 3, rsi_buffer_1h);
+      CopyBuffer(macd_handle_4h, 0, 0, last_max_candles_macd, macd_buffer_4h);
+      CopyBuffer(macd_handle_4h, 0, 1, last_max_candles_macd, macd_buffer_signal_4h);
 
       ArraySetAsSeries(ema_30_buffer, true);
       ArraySetAsSeries(ema_65_buffer, true);
       ArraySetAsSeries(ema_100_buffer, true);
       ArraySetAsSeries(ema_200_buffer, true);
+      
+      if(long_allowed){
+         // Check for long exits
+         CheckExitLong();
 
-      // Check for exits
-      CheckExitLong();
-
-      // Check for entries
-      if(ema_30_buffer[1] > ema_65_buffer[1] &&
-         ema_65_buffer[1] > ema_100_buffer[1] &&
-         ema_100_buffer[1] > ema_200_buffer[1] &&
-         iLow(asset, period, 2) < ema_200_buffer[2] &&
-         iClose(asset, period, 1) > ema_200_buffer[1]){
-            OpenLong("");
+         // Check for long entries
+         if(ema_30_buffer[1] > ema_65_buffer[1] &&
+            ema_65_buffer[1] > ema_100_buffer[1] &&
+            ema_100_buffer[1] > ema_200_buffer[1] &&
+            iLow(asset, period, 2) < ema_200_buffer[2] &&
+            iClose(asset, period, 1) > ema_200_buffer[1]){
+               OpenLong("");
          }
+      }
+
+      if(short_allowed){
+         // Check for short exits
+         CheckExitShort();
+
+         // Check for short entries
+         if(macd_buffer_4h[2] > macd_buffer_4h[1] &&
+            macd_buffer_signal_4h[2] > macd_buffer_signal_4h[1] &&
+            macd_buffer_4h[1] < macd_buffer_signal_4h[1] &&
+            ema_65_buffer[2] > ema_65_buffer[1] &&
+            ArrayMaximum(macd_buffer_4h, 0, last_max_candles_macd) > macd_level_short){
+            OpenShort("");
+         }
+      }
    }
 }
 
