@@ -75,7 +75,7 @@ input double rsi_value_tp_long = 65;      // Long Max RSI tp value
 
 // Short
 sinput bool short_allowed = true;         // Short allowed
-input double macd_level_short = 5.0;      // Short Enter MACD level
+input double macd_level_short = 3.0;      // Short Enter MACD level
 input int last_max_candles_sl_short = 7;  // Short Latest min in terms of candles
 input int last_max_candles_macd = 10;     // Short Last X candles to check max MACD
 input double rsi_value_tp_short = 10;     // Short Max RSI tp value
@@ -244,12 +244,40 @@ int OnInit(){
    rsi_handle_1h = iRSI(asset, period, 14, PRICE_CLOSE);
    rsi_handle_1d = iRSI(asset, PERIOD_D1, 14, PRICE_CLOSE);
    
+   ArraySetAsSeries(ema_30_buffer, true);
+   ArraySetAsSeries(ema_65_buffer, true);
+   ArraySetAsSeries(ema_100_buffer, true);
+   ArraySetAsSeries(ema_200_buffer, true);
+   ArraySetAsSeries(macd_buffer_4h, true);
+   ArraySetAsSeries(macd_buffer_signal_4h, true);
+   ArraySetAsSeries(rsi_buffer_1d, true);
+   ArraySetAsSeries(rsi_buffer_1h, true);
+
    return(INIT_SUCCEEDED);
 }
 
 void OnTick(){
 
    if(isNewBar()){
+
+      if(TimeToString(TimeCurrent(), TIME_DATE)== "2022.08.19" ||
+      TimeToString(TimeCurrent(), TIME_DATE)== "2022.08.22" ||
+      TimeToString(TimeCurrent(), TIME_DATE)== "2022.08.23" 
+
+      ){
+
+         Print("------------");
+         Print("macd4h ", macd_buffer_4h[1]);
+         Print("macd4hsignal ", macd_buffer_signal_4h[1]);
+         Print(macd_buffer_4h[ArrayMaximum(macd_buffer_4h, 0, last_max_candles_macd)]);
+
+         // Print(macd_buffer_4h[2] > macd_buffer_4h[1]);
+         // Print(macd_buffer_signal_4h[2] > macd_buffer_signal_4h[1]);
+         // Print(macd_buffer_4h[1] < macd_buffer_signal_4h[1]);
+         // Print(ema_65_buffer[2] > ema_65_buffer[1]);
+         // Print(macd_buffer_4h[ArrayMaximum(macd_buffer_4h, 0, last_max_candles_macd)] > macd_level_short);
+      
+      }
 
       // Set up indicator values
       if(TimeToString(TimeCurrent(), TIME_MINUTES)== "16:00"){
@@ -264,10 +292,7 @@ void OnTick(){
       CopyBuffer(macd_handle_4h, 0, 0, last_max_candles_macd, macd_buffer_4h);
       CopyBuffer(macd_handle_4h, 0, 1, last_max_candles_macd, macd_buffer_signal_4h);
 
-      ArraySetAsSeries(ema_30_buffer, true);
-      ArraySetAsSeries(ema_65_buffer, true);
-      ArraySetAsSeries(ema_100_buffer, true);
-      ArraySetAsSeries(ema_200_buffer, true);
+
       
       if(long_allowed){
          // Check for long exits
@@ -284,16 +309,20 @@ void OnTick(){
       }
 
       if(short_allowed){
-         // Check for short exits
-         CheckExitShort();
+         if(CheckPositionOpen() == "short"){
+            // Check for short exits
+            CheckExitShort();
+         }
 
-         // Check for short entries
-         if(macd_buffer_4h[2] > macd_buffer_4h[1] &&
-            macd_buffer_signal_4h[2] > macd_buffer_signal_4h[1] &&
-            macd_buffer_4h[1] < macd_buffer_signal_4h[1] &&
-            ema_65_buffer[2] > ema_65_buffer[1] &&
-            ArrayMaximum(macd_buffer_4h, 0, last_max_candles_macd) > macd_level_short){
-            OpenShort("");
+         if(CheckPositionOpen() == "none"){
+            // Check for short entries
+            if(macd_buffer_4h[2] > macd_buffer_4h[1] &&
+               macd_buffer_signal_4h[2] > macd_buffer_signal_4h[1] &&
+               macd_buffer_4h[1] < macd_buffer_signal_4h[1] &&
+               ema_65_buffer[2] > ema_65_buffer[1] &&
+               macd_buffer_4h[ArrayMaximum(macd_buffer_4h, 0, last_max_candles_macd)] > macd_level_short){
+                  OpenShort("");
+            }
          }
       }
    }
