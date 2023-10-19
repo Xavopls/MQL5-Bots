@@ -17,17 +17,18 @@ SPY
 -------------------------------------------------------
 
 - Short
-   - 4h MACD line and Signal line decreasing
-   - 4h MACD Line < 4h Signal line
-   - 1h EMA 65 decreasing
-   - 4h MACD line > X level (Y last candles ej 10)
-
+   - 1h EMA 30 < 1h EMA 65 < 1h EMA 100 < 1h EMA 200
+   - X amount of 1d candles where the min < 1d EMA 100 
+   - (Boolean) BEARISH candle crossing EMA 100? (Boolean) gaps allowed?
+   - EMA 200 - EMA 100 > X
+   - (Boolean) 1h EMA 30?
 - SL
    - Maximum of last X 1h candles
+   - If current price is higher than last max, add X to open price
 
 - TP 
-   - 1h RSI Below X Level
-   - 1h RSI growing
+   - Trailing stop?
+   - TBD
 -------------------------------------------------------
 */
 
@@ -49,18 +50,21 @@ bool real_account_permitted = false;
 bool async_trading_permitted = false;
 
 int bars_total;
-int ema_30_handle; 
-int ema_65_handle; 
-int ema_100_handle;
-int ema_200_handle;
+int ema_30_handle_1h; 
+int ema_65_handle_1h; 
+int ema_100_handle_1h;
+int ema_200_handle_1h;
+int ema_100_handle_1d;
 int macd_handle_4h;
 int rsi_handle_1d;
 int rsi_handle_1h;
 
-double ema_30_buffer[]; 
-double ema_65_buffer[]; 
-double ema_100_buffer[];
-double ema_200_buffer[];
+double ema_30_buffer_1h[]; 
+double ema_65_buffer_1h[]; 
+double ema_100_buffer_1h[];
+double ema_200_buffer_1h[];
+double ema_100_buffer_1d[];
+
 double macd_buffer_4h[];
 double macd_buffer_signal_4h[];
 double rsi_buffer_1d[];
@@ -74,11 +78,14 @@ input int last_min_candles_sl_long = 7;   // Long Latest min in terms of candles
 input double rsi_value_tp_long = 65;      // Long Max RSI tp value
 
 // Short
-sinput bool short_allowed = true;         // Short allowed
-input double macd_level_short = 3.0;      // Short Enter MACD level
-input int last_max_candles_sl_short = 7;  // Short Latest min in terms of candles
-input int last_max_candles_macd = 10;     // Short Last X candles to check max MACD
-input double rsi_value_tp_short = 10;     // Short Max RSI tp value
+sinput bool short_allowed = false;              // Short allowed
+input int candles_lookback_crossed_ema = 3;     // Candle amount to lookback when crossed EMA
+input bool bearish_only_crossed_ema = true;     // Candle that crossed ema only bearish?
+input bool gaps_allowed_crossed_ema = true;     // Gaps allowed in the crossed ema?
+input double diff_ema200_ema100 = 10;           // Minimum difference between EMA 200 and EMA 100
+input bool ema_30_allowed = true;               // EMA 30 allowed?
+input int last_max_candles_sl_short = 10;       // Amount of candles to get last maximum (SL)
+
 
 // Open long position
 void OpenLong(string comment){
@@ -118,8 +125,7 @@ void CheckExitLong(){
 
 // Check close long
 void CheckExitShort(){
-   if(rsi_buffer_1h[1] < rsi_value_tp_short &&
-      rsi_buffer_1h[2] < rsi_buffer_1h[1]){
+   if(true){ //TBD
          closeAllOrders();
    }
 }
@@ -222,6 +228,12 @@ bool isAccountReal(){
    }
 }
 
+bool crossedEma100(){
+
+   return(true);
+}
+
+
 int OnInit(){
    // If real account is not permitted, exit
    if(!real_account_permitted) {
@@ -234,20 +246,22 @@ int OnInit(){
    trade.SetAsyncMode(async_trading_permitted);
 
    // Init indicators
-   ema_30_handle = iMA(asset, period, 30, 0, MODE_EMA, PRICE_CLOSE);
-   ema_65_handle = iMA(asset, period, 65, 0, MODE_EMA, PRICE_CLOSE);
-   ema_100_handle = iMA(asset, period, 100, 0, MODE_EMA, PRICE_CLOSE);
-   ema_200_handle = iMA(asset, period, 200, 0, MODE_EMA, PRICE_CLOSE);
+   ema_30_handle_1h = iMA(asset, period, 30, 0, MODE_EMA, PRICE_CLOSE);
+   ema_65_handle_1h = iMA(asset, period, 65, 0, MODE_EMA, PRICE_CLOSE);
+   ema_100_handle_1h = iMA(asset, period, 100, 0, MODE_EMA, PRICE_CLOSE);
+   ema_200_handle_1h = iMA(asset, period, 200, 0, MODE_EMA, PRICE_CLOSE);
+   ema_100_handle_1d = iMA(asset, PERIOD_D1, 100, 0, MODE_EMA, PRICE_CLOSE);
 
    macd_handle_4h = iMACD(asset, PERIOD_H4, 12, 26, 9, PRICE_CLOSE);
 
    rsi_handle_1h = iRSI(asset, period, 14, PRICE_CLOSE);
    rsi_handle_1d = iRSI(asset, PERIOD_D1, 14, PRICE_CLOSE);
    
-   ArraySetAsSeries(ema_30_buffer, true);
-   ArraySetAsSeries(ema_65_buffer, true);
-   ArraySetAsSeries(ema_100_buffer, true);
-   ArraySetAsSeries(ema_200_buffer, true);
+   ArraySetAsSeries(ema_30_buffer_1h, true);
+   ArraySetAsSeries(ema_65_buffer_1h, true);
+   ArraySetAsSeries(ema_100_buffer_1h, true);
+   ArraySetAsSeries(ema_200_buffer_1h, true);
+   ArraySetAsSeries(ema_100_buffer_1d, true);
    ArraySetAsSeries(macd_buffer_4h, true);
    ArraySetAsSeries(macd_buffer_signal_4h, true);
    ArraySetAsSeries(rsi_buffer_1d, true);
@@ -260,37 +274,21 @@ void OnTick(){
 
    if(isNewBar()){
 
-      if(TimeToString(TimeCurrent(), TIME_DATE)== "2022.08.19" ||
-      TimeToString(TimeCurrent(), TIME_DATE)== "2022.08.22" ||
-      TimeToString(TimeCurrent(), TIME_DATE)== "2022.08.23" 
-
-      ){
-
-         Print("------------");
-         Print("macd4h ", macd_buffer_4h[1]);
-         Print("macd4hsignal ", macd_buffer_signal_4h[1]);
-         Print(macd_buffer_4h[ArrayMaximum(macd_buffer_4h, 0, last_max_candles_macd)]);
-
-         // Print(macd_buffer_4h[2] > macd_buffer_4h[1]);
-         // Print(macd_buffer_signal_4h[2] > macd_buffer_signal_4h[1]);
-         // Print(macd_buffer_4h[1] < macd_buffer_signal_4h[1]);
-         // Print(ema_65_buffer[2] > ema_65_buffer[1]);
-         // Print(macd_buffer_4h[ArrayMaximum(macd_buffer_4h, 0, last_max_candles_macd)] > macd_level_short);
-      
-      }
+      // if(TimeToString(TimeCurrent(), TIME_DATE)== "2022.08.19" ||
+      // TimeToString(TimeCurrent(), TIME_DATE)== "2022.08.22" ||
+      // TimeToString(TimeCurrent(), TIME_DATE)== "2022.08.23" ){}
 
       // Set up indicator values
       if(TimeToString(TimeCurrent(), TIME_MINUTES)== "16:00"){
          CopyBuffer(rsi_handle_1d, 0, 0, 3, rsi_buffer_1d);
+         CopyBuffer(ema_100_handle_1d, 0, 0, candles_lookback_crossed_ema, ema_100_buffer_1d);
       }
 
-      CopyBuffer(ema_30_handle, 0, 0, 3, ema_30_buffer);
-      CopyBuffer(ema_65_handle, 0, 0, 3, ema_65_buffer);
-      CopyBuffer(ema_100_handle, 0, 0, 3, ema_100_buffer);
-      CopyBuffer(ema_200_handle, 0, 0, 3, ema_200_buffer);
+      CopyBuffer(ema_30_handle_1h, 0, 0, 3, ema_30_buffer_1h);
+      CopyBuffer(ema_65_handle_1h, 0, 0, 3, ema_65_buffer_1h);
+      CopyBuffer(ema_100_handle_1h, 0, 0, 3, ema_100_buffer_1h);
+      CopyBuffer(ema_200_handle_1h, 0, 0, 3, ema_200_buffer_1h);
       CopyBuffer(rsi_handle_1h, 0, 0, 3, rsi_buffer_1h);
-      CopyBuffer(macd_handle_4h, 0, 0, last_max_candles_macd, macd_buffer_4h);
-      CopyBuffer(macd_handle_4h, 0, 1, last_max_candles_macd, macd_buffer_signal_4h);
 
 
       
@@ -299,11 +297,11 @@ void OnTick(){
          CheckExitLong();
 
          // Check for long entries
-         if(ema_30_buffer[1] > ema_65_buffer[1] &&
-            ema_65_buffer[1] > ema_100_buffer[1] &&
-            ema_100_buffer[1] > ema_200_buffer[1] &&
-            iLow(asset, period, 2) < ema_200_buffer[2] &&
-            iClose(asset, period, 1) > ema_200_buffer[1]){
+         if(ema_30_buffer_1h[1] > ema_65_buffer_1h[1] &&
+            ema_65_buffer_1h[1] > ema_100_buffer_1h[1] &&
+            ema_100_buffer_1h[1] > ema_200_buffer_1h[1] &&
+            iLow(asset, period, 2) < ema_200_buffer_1h[2] &&
+            iClose(asset, period, 1) > ema_200_buffer_1h[1]){
                OpenLong("");
          }
       }
@@ -316,12 +314,12 @@ void OnTick(){
 
          if(CheckPositionOpen() == "none"){
             // Check for short entries
-            if(macd_buffer_4h[2] > macd_buffer_4h[1] &&
-               macd_buffer_signal_4h[2] > macd_buffer_signal_4h[1] &&
-               macd_buffer_4h[1] < macd_buffer_signal_4h[1] &&
-               ema_65_buffer[2] > ema_65_buffer[1] &&
-               macd_buffer_4h[ArrayMaximum(macd_buffer_4h, 0, last_max_candles_macd)] > macd_level_short){
-                  OpenShort("");
+            if(ema_30_buffer_1h[1] < ema_65_buffer_1h[1] &&
+            ema_65_buffer_1h[1] < ema_100_buffer_1h[1] &&
+            ema_100_buffer_1h[1] < ema_200_buffer_1h[1] &&
+            crossedEma100() &&
+            (ema_200_buffer_1h[1] - ema_100_buffer_1h[1]) > diff_ema200_ema100 ){
+               OpenShort("");
             }
          }
       }
