@@ -11,8 +11,49 @@ class Utils : public CObject{
       
       //--------- BACKTEST METHODS ---------
       bool BacktestExportCsv(void) const;
+   
+      //--------- TRADING METHODS ---------
 
+      /** Returns the amount of shares to buy given the stoploss, entry price and the total balance.
+       * @param entry_price  [in]  Entry price of the asset.
+       * @param stop_loss_price  [in]  Stop loss price of the trade.
+       * @param total_equity  [in]  Total balance of the account.
+       * @param percentage_to_lose  [in]  Percentage willing to lose for the trade.
+       * @return ( int )
+       */
+      int SharesToBuy(
+         double entry_price,
+         double stop_loss_price,
+         double total_equity,
+         double percentage_to_lose) const;
 };  
+
+
+
+//--------- TRADING METHODS ---------
+
+int Utils::SharesToBuy(         
+         double entry_price,
+         double stop_loss_price,
+         double total_equity,
+         double percentage_to_lose) const{
+            // Get the maximum amount of shares that could be bought with the current equity
+            int max_amount_of_shares_possible = int(MathRound(total_equity / entry_price));
+
+            // Calculate number of shares
+            double amount_to_risk = total_equity * (percentage_to_lose / 100);
+            double stop_loss_level = MathAbs(entry_price - stop_loss_price);
+            int shares_to_buy = int(MathRound(amount_to_risk / stop_loss_level));
+
+            // Check if the shares too buy are more than we can possibly can with the current balance
+            if(shares_to_buy > max_amount_of_shares_possible){
+               return(max_amount_of_shares_possible);
+            }
+            else {
+               return(shares_to_buy);
+            }
+         }
+
    //--------- BACKTEST METHODS ---------
    
 bool Utils::BacktestExportCsv(void) const {
