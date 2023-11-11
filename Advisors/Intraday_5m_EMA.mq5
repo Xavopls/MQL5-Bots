@@ -48,7 +48,8 @@ double ema_200_buffer_5m[];
 double rsi_buffer_5m[];
 
 // Input variables
-int candles_sl = 5; // Amount of candles to get last Min for Long SL
+int candles_sl_long = 5; // Amount of candles to get last Min for Long SL
+int candles_sl_short = 5; // Amount of candles to get last Min for Short SL
 
 
 // Open long position
@@ -121,7 +122,7 @@ double GetTpLong(){
 
 // Get SL of long position
 double GetSlLong(){
-   return(iLow(Symbol(), Period(), iLowest(Symbol(), Period(), MODE_LOW, candles_sl, 1)));
+   return(iLow(Symbol(), Period(), iLowest(Symbol(), Period(), MODE_LOW, candles_sl_long, 1)));
 }
 
 double GetTpShort(){
@@ -130,7 +131,7 @@ double GetTpShort(){
 
 // Get SL of short position
 double GetSlShort(){
-   return(0);
+   return(iHigh(Symbol(), Period(), iHighest(Symbol(), Period(), MODE_LOW, candles_sl_short, 1)));
 }
 
 void closeAllOrders(){
@@ -216,6 +217,14 @@ void OnTick(){
          ema_65_buffer_5m[2] < ema_200_buffer_5m[2]){
             OpenLong("");
          }
+
+         // Check for shorts
+         if(ema_15_buffer_5m[1] < ema_30_buffer_5m[1] &&
+         ema_30_buffer_5m[1] < ema_65_buffer_5m[1] &&
+         ema_65_buffer_5m[1] < ema_200_buffer_5m[1] &&
+         ema_65_buffer_5m[2] > ema_200_buffer_5m[2]){
+            OpenShort("");
+         }
       }
 
       if(CheckPositionOpen() == "long"){
@@ -234,7 +243,12 @@ void OnTick(){
          }
       }
 
-      
+      if(CheckPositionOpen() == "short"){
+         // Check TP
+         if(ema_15_buffer_5m[1] > ema_65_buffer_5m[1]){
+            closeAllOrders();
+         }
+      }
    }
 }
 
