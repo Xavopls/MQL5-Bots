@@ -45,7 +45,7 @@ int Utils::SharesToBuy(
             double stop_loss_level = MathAbs(entry_price - stop_loss_price);
             int shares_to_buy = int(MathRound(amount_to_risk / stop_loss_level));
 
-            // Check if the shares too buy are more than we can possibly can with the current balance
+            // Check if the shares to buy are more than we can with the current balance
             if(shares_to_buy > max_amount_of_shares_possible){
                return(max_amount_of_shares_possible);
             }
@@ -67,7 +67,7 @@ bool Utils::BacktestExportCsv(void) const {
    double pl_results[];
    ulong ticket_history_deal = 0;
    double result[];
-   ArrayResize(result,total_deals);
+   ArrayResize(result, total_deals);
    string agent_name = MQLInfoString(MQL_PROGRAM_NAME);
 
    // Write results in a .csv file
