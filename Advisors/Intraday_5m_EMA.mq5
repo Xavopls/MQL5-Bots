@@ -40,7 +40,6 @@ COrderInfo order;
 
 
 // Global variables
-float pos_size = 80;
 string asset = Symbol();
 ENUM_TIMEFRAMES period = Period();
 bool real_account_permitted = false;
@@ -59,14 +58,18 @@ double ema_200_buffer_5m[];
 double rsi_buffer_5m[];
 
 // Static inputs
-sinput bool short_allowed = true;          // Short allowed
-sinput bool long_allowed = true;           // Long allowed
+sinput bool short_allowed = true;            // Short allowed
+sinput bool long_allowed = true;             // Long allowed
+sinput bool partial_exits_allowed = true;    // Partial exits allowed
+sinput bool rsi_pyramiding_allowed = true;   // Pyramiding allowed
 
 // Input variables
-input int candles_sl_long = 5;      // Amount of candles to get last Min for Long SL
-input int candles_sl_short = 5;     // Amount of candles to get last Min for Short SL
-input double rsi_value_long = 30;   // RSI level for pyramiding
-
+input float pos_size = 10;                   // Position size
+input int candles_sl_long = 5;               // Amount of candles to get last Min for Long SL
+input int candles_sl_short = 5;              // Amount of candles to get last Min for Short SL
+input double rsi_value_long = 30;            // RSI level for pyramiding
+input double partial_tp_ratio = 1.5;         // Ratio SL:TP of the partial exit
+input double partial_percentage = 50;        // Position size in % to reduce when partially closing
 
 // Open long position
 void OpenLong(string comment){
@@ -190,6 +193,38 @@ bool isAccountReal(){
    }
 }
 
+void CheckIfPartialClose(){
+   // Init variables 
+   double 
+      position_volume, 
+      position_current_profit_distance, 
+      position_sl_distance;
+
+   // Loop through open positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){
+      // Select position
+      if(position.SelectByIndex(i)){
+         // Check if position has not already been partially closed
+         // The only way to know if the position has been partially closed is by comparing the initial static volume
+         // With the current volume. Cheap way of doing it but there's not a different way.
+         position_volume = position.Volume();
+         if(position_volume == pos_size){
+            // Check if it's profitable
+            if(position.Profit() > 0){
+               // Get position info
+               position_current_profit_distance = MathAbs(position.PriceOpen() - position.PriceCurrent());
+               position_sl_distance = MathAbs(position.PriceOpen() - position.StopLoss());
+
+               // Check if partial profit reached
+               if(position_current_profit_distance > position_sl_distance * partial_tp_ratio){
+                  trade.PositionClosePartial(position.Ticket(), position_volume * (partial_percentage / 100));
+               }
+            }
+         }
+      }
+   }
+}
+
 int OnInit(){
    // If real account is not permitted, exit
    if(!real_account_permitted) {
@@ -247,23 +282,33 @@ void OnTick(){
          }
       }
 
-      if(CheckPositionOpen() == "long"){
-         // Check if add position
-         if(rsi_buffer_5m[2] < rsi_buffer_5m[1] &&
-         rsi_buffer_5m[2] > rsi_value_long){
-            OpenLong("");
+      else {
+         // Check if any trade has reached the partial objective
+         if(partial_exits_allowed){
+            CheckIfPartialClose();
          }
 
-         // Check TP
-         if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
-            closeAllOrders();
-         }
-      }
+         if(CheckPositionOpen() == "long"){
+            if(rsi_pyramiding_allowed){
+               // Check if add position
+               if(rsi_buffer_5m[2] < rsi_buffer_5m[1] &&
+               rsi_buffer_5m[2] < rsi_value_long){
+                  OpenLong("");
+               }
+            }
 
-      if(CheckPositionOpen() == "short"){
-         // Check TP
-         if(ema_15_buffer_5m[1] > ema_65_buffer_5m[1]){
-            closeAllOrders();
+
+            // Check TP
+            if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
+               closeAllOrders();
+            }
+         }
+
+         if(CheckPositionOpen() == "short"){
+            // Check TP
+            if(ema_15_buffer_5m[1] > ema_65_buffer_5m[1]){
+               closeAllOrders();
+            }
          }
       }
    }
