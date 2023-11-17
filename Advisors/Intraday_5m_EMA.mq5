@@ -31,13 +31,12 @@
 #include <Trade/Trade.mqh>
 #include <Trade/AccountInfo.mqh>
 #property tester_everytick_calculate
-
+#include <Arrays/List.mqh>
 
 CTrade trade;
 ulong pos_ticket;
 CPositionInfo position; 
 COrderInfo order;
-
 
 // Global variables
 string asset = Symbol();
@@ -45,6 +44,8 @@ ENUM_TIMEFRAMES period = Period();
 bool real_account_permitted = false;
 bool async_trading_permitted = false;
 int bars_total;
+CList active_positions;
+double partial_closed_tickets[];
 
 int ema_15_handle_5m;
 int ema_30_handle_5m;
@@ -76,8 +77,9 @@ void OpenLong(string comment){
    double sl = GetSlLong();
    double tp = GetTpLong();
    double ask = SymbolInfoDouble(asset, SYMBOL_ASK);
-   trade.Buy(pos_size, asset, ask, sl, tp, comment);
-   pos_ticket = trade.ResultOrder();
+   if(trade.Buy(pos_size, asset, ask, sl, tp, comment)){
+      pos_ticket = trade.ResultOrder();
+   }
 }
 
 // Open short position
@@ -85,8 +87,9 @@ void OpenShort(string comment){
    double sl = GetSlShort(); 
    double tp = GetTpShort();
    double bid = SymbolInfoDouble(asset, SYMBOL_BID);
-   trade.Sell(pos_size, asset, bid, sl, 0, comment);
-   pos_ticket = trade.ResultOrder();
+   if(trade.Sell(pos_size, asset, bid, sl, 0, comment)){
+      pos_ticket = trade.ResultOrder();
+   }
 }
 
 // Close position
@@ -192,6 +195,14 @@ bool isAccountReal(){
       return(false);
    }
 }
+bool IsAlreadyPartiallyClosed(double ticket){
+   for(int i=0; i < ArraySize(partial_closed_tickets); i++){
+      if(ticket == partial_closed_tickets[i]){
+         return(true);
+      }
+   }
+   return(false);
+}
 
 void CheckIfPartialClose(){
    // Init variables 
@@ -205,19 +216,19 @@ void CheckIfPartialClose(){
       // Select position
       if(position.SelectByIndex(i)){
          // Check if position has not already been partially closed
-         // The only way to know if the position has been partially closed is by comparing the initial static volume
-         // With the current volume. Cheap way of doing it but there's not a different way.
-         position_volume = position.Volume();
-         if(position_volume == pos_size){
+         if(!IsAlreadyPartiallyClosed(position.Ticket())){
             // Check if it's profitable
             if(position.Profit() > 0){
                // Get position info
+               position_volume = position.Volume();
                position_current_profit_distance = MathAbs(position.PriceOpen() - position.PriceCurrent());
                position_sl_distance = MathAbs(position.PriceOpen() - position.StopLoss());
 
                // Check if partial profit reached
                if(position_current_profit_distance > position_sl_distance * partial_tp_ratio){
                   trade.PositionClosePartial(position.Ticket(), position_volume * (partial_percentage / 100));
+                  ArrayResize(partial_closed_tickets, ArraySize(partial_closed_tickets)+1);
+                  ArrayFill(partial_closed_tickets, ArraySize(partial_closed_tickets)-1, 1, position.Ticket());
                }
             }
          }
@@ -297,7 +308,6 @@ void OnTick(){
                }
             }
 
-
             // Check TP
             if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
                closeAllOrders();
@@ -322,6 +332,7 @@ void OnTrade(){}
 void OnTradeTransaction(const MqlTradeTransaction& trans,
                         const MqlTradeRequest& request,
                         const MqlTradeResult& result){}
+
 double OnTester(){return(0.0);}
 
 void OnChartEvent(const int id,
@@ -329,4 +340,15 @@ void OnChartEvent(const int id,
                   const double &dparam,
                   const string &sparam){}
 
-void OnDeinit(const int reason){EventKillTimer();}
+void OnDeinit(const int reason){
+      for(int i=0; i < ArraySize(partial_closed_tickets)-1; i++){
+         Print(partial_closed_tickets[i]);
+      }
+   
+   EventKillTimer();}
+
+/* todo
+
+- Clean partial_closed_tickets array when the whole operation is closed. (through OnTradeTransaction)
+
+*/
