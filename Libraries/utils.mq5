@@ -4,6 +4,9 @@
 #property version   "1.00"
 #include <Object.mqh>
 
+
+
+
 class Utils : public CObject{
    public:
       Utils::Utils(void){}
@@ -21,38 +24,62 @@ class Utils : public CObject{
        * @param percentage_to_lose  [in]  Percentage willing to lose for the trade.
        * @return ( int )
        */
-      int SharesToBuy(
+      int SharesToBuyPerPercentageLost(
          double entry_price,
          double stop_loss_price,
          double total_equity,
          double percentage_to_lose) const;
+
+      /** Returns the amount of shares to buy given the percentage of equity per trade.
+       * @param price_per_lot  [in]  Price per lot in the currency of the account.
+       * @param total_equity  [in]  Total balance of the account.
+       * @param percentage_equity  [in]  Percentage of the account per trade.
+       * @return ( int )
+       */
+      int SharesToBuyPerMaxEquity(
+         double price_per_lot,
+         double total_equity,
+         double percentage_equity) const;
 };  
 
 
 
 //--------- TRADING METHODS ---------
 
-int Utils::SharesToBuy(         
-         double entry_price,
-         double stop_loss_price,
-         double total_equity,
-         double percentage_to_lose) const{
-            // Get the maximum amount of shares that could be bought with the current equity
-            int max_amount_of_shares_possible = int(MathRound(total_equity / entry_price));
+int Utils::SharesToBuyPerPercentageLost(         
+   double entry_price,
+   double stop_loss_price,
+   double total_equity,
+   double percentage_to_lose) const {
+      
+      // Get the maximum amount of shares that could be bought with the current equity
+      int max_amount_of_shares_possible = int(MathRound(total_equity / entry_price));
 
-            // Calculate number of shares
-            double amount_to_risk = total_equity * (percentage_to_lose / 100);
-            double stop_loss_level = MathAbs(entry_price - stop_loss_price);
-            int shares_to_buy = int(MathRound(amount_to_risk / stop_loss_level));
+      // Calculate number of shares
+      double amount_to_risk = total_equity * (percentage_to_lose / 100);
+      double stop_loss_level = MathAbs(entry_price - stop_loss_price);
+      int shares_to_buy = int(MathRound(amount_to_risk / stop_loss_level));
 
-            // Check if the shares to buy are more than we can with the current balance
-            if(shares_to_buy > max_amount_of_shares_possible){
-               return(max_amount_of_shares_possible);
-            }
-            else {
-               return(shares_to_buy);
-            }
-         }
+      // Check if the shares to buy are more than we can with the current balance
+      if(shares_to_buy > max_amount_of_shares_possible){
+         return(max_amount_of_shares_possible);
+      }
+      else {
+         return(shares_to_buy);
+      }
+   }
+
+int Utils::SharesToBuyPerMaxEquity(
+   double price_per_lot,
+   double total_equity,
+   double percentage_equity) const {
+      
+      double equity_per_trade = total_equity * (percentage_equity / 100);
+      int lot_amount = int(MathRound(equity_per_trade / price_per_lot));
+      return(lot_amount);
+   }
+
+
 
    //--------- BACKTEST METHODS ---------
    

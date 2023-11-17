@@ -32,11 +32,12 @@
 #include <Trade/AccountInfo.mqh>
 #property tester_everytick_calculate
 #include <Arrays/List.mqh>
-
+#include "../Libraries/Utils.mq5"
 CTrade trade;
 ulong pos_ticket;
 CPositionInfo position; 
 COrderInfo order;
+Utils utils;
 
 // Global variables
 string asset = Symbol();
@@ -44,7 +45,6 @@ ENUM_TIMEFRAMES period = Period();
 bool real_account_permitted = false;
 bool async_trading_permitted = false;
 int bars_total;
-CList active_positions;
 double partial_closed_tickets[];
 
 int ema_15_handle_5m;
@@ -59,25 +59,26 @@ double ema_200_buffer_5m[];
 double rsi_buffer_5m[];
 
 // Static inputs
-sinput bool short_allowed = true;            // Short allowed
-sinput bool long_allowed = true;             // Long allowed
-sinput bool partial_exits_allowed = true;    // Partial exits allowed
-sinput bool rsi_pyramiding_allowed = true;   // Pyramiding allowed
+sinput bool short_allowed = true;               // Short allowed
+sinput bool long_allowed = true;                // Long allowed
+sinput bool partial_exits_allowed = true;       // Partial exits allowed
+sinput bool rsi_pyramiding_allowed = true;      // Pyramiding allowed
 
 // Input variables
-input float pos_size = 10;                   // Position size
-input int candles_sl_long = 5;               // Amount of candles to get last Min for Long SL
-input int candles_sl_short = 5;              // Amount of candles to get last Min for Short SL
-input double rsi_value_long = 30;            // RSI level for pyramiding
-input double partial_tp_ratio = 1.5;         // Ratio SL:TP of the partial exit
-input double partial_percentage = 50;        // Position size in % to reduce when partially closing
+input float equity_percentage_per_trade = 40;   // Equity percentage per trade
+input int candles_sl_long = 5;                  // Amount of candles to get last Min for Long SL
+input int candles_sl_short = 5;                 // Amount of candles to get last Min for Short SL
+input double rsi_value_long = 30;               // RSI level for pyramiding
+input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial exit
+input double partial_percentage = 50;           // Position size in % to reduce when partially closing
 
 // Open long position
 void OpenLong(string comment){
    double sl = GetSlLong();
    double tp = GetTpLong();
    double ask = SymbolInfoDouble(asset, SYMBOL_ASK);
-   if(trade.Buy(pos_size, asset, ask, sl, tp, comment)){
+   int size = utils.SharesToBuyPerMaxEquity(ask/5, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   if(trade.Buy(size, asset, ask, sl, tp, comment)){
       pos_ticket = trade.ResultOrder();
    }
 }
@@ -87,7 +88,8 @@ void OpenShort(string comment){
    double sl = GetSlShort(); 
    double tp = GetTpShort();
    double bid = SymbolInfoDouble(asset, SYMBOL_BID);
-   if(trade.Sell(pos_size, asset, bid, sl, 0, comment)){
+   int size = utils.SharesToBuyPerMaxEquity(bid/5, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   if(trade.Sell(size, asset, bid, sl, 0, comment)){
       pos_ticket = trade.ResultOrder();
    }
 }
@@ -344,7 +346,7 @@ void OnDeinit(const int reason){
       for(int i=0; i < ArraySize(partial_closed_tickets)-1; i++){
          Print(partial_closed_tickets[i]);
       }
-   
+   Print(SymbolInfoDouble(asset, SYMBOL_TRADE_CONTRACT_SIZE));
    EventKillTimer();}
 
 /* todo
