@@ -4,10 +4,6 @@
       - 5m EMA 15[1] > 5m EMA 30[1] > 5m EMA 65[1] > 5m EMA 200[1] 
       - 5m EMA 65[2] < 5m EMA 200[2] 
 
-   - Pyramiding
-      - 5m RSI[2] < 5m RSI[1]
-      - 5m RSI[2] > X
-
    - TP
       - 5m EMA 15[1] < 5m EMA 65[1]
 
@@ -18,8 +14,6 @@
    - Entry
       - 5m EMA 15[1] < 5m EMA 30[1] < 5m EMA 65[1] < 5m EMA 200[1] 
       - 5m EMA 65[2] > 5m EMA 200[2] 
-
-   - Pyramiding (TBD)
 
    - TP
       - 5m EMA 15[1] > 5m EMA 65[1]
@@ -51,24 +45,20 @@ int ema_15_handle_5m;
 int ema_30_handle_5m;
 int ema_65_handle_5m;
 int ema_200_handle_5m;
-int rsi_handle_5m;
 double ema_15_buffer_5m[];
 double ema_30_buffer_5m[]; 
 double ema_65_buffer_5m[]; 
 double ema_200_buffer_5m[];
-double rsi_buffer_5m[];
 
 // Static inputs
 sinput bool short_allowed = true;               // Short allowed
 sinput bool long_allowed = true;                // Long allowed
 sinput bool partial_exits_allowed = true;       // Partial exits allowed
-sinput bool rsi_pyramiding_allowed = true;      // Pyramiding allowed
 
 // Input variables
 input float equity_percentage_per_trade = 40;   // Equity percentage per trade
 input int candles_sl_long = 5;                  // Amount of candles to get last Min for Long SL
 input int candles_sl_short = 5;                 // Amount of candles to get last Min for Short SL
-input double rsi_value_long = 30;               // RSI level for pyramiding
 input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial exit
 input double partial_percentage = 50;           // Position size in % to reduce when partially closing
 
@@ -253,13 +243,11 @@ int OnInit(){
    ema_30_handle_5m = iMA(asset, period, 30, 0, MODE_EMA, PRICE_CLOSE);
    ema_65_handle_5m = iMA(asset, period, 65, 0, MODE_EMA, PRICE_CLOSE);
    ema_200_handle_5m = iMA(asset, period, 200, 0, MODE_EMA, PRICE_CLOSE);
-   rsi_handle_5m = iRSI(asset, period, 14, PRICE_CLOSE);
 
    ArraySetAsSeries(ema_15_buffer_5m, true);
    ArraySetAsSeries(ema_30_buffer_5m, true);
    ArraySetAsSeries(ema_65_buffer_5m, true);
    ArraySetAsSeries(ema_200_buffer_5m, true);
-   ArraySetAsSeries(rsi_buffer_5m, true);
 
    return(INIT_SUCCEEDED);
 }
@@ -271,7 +259,6 @@ void OnTick(){
       CopyBuffer(ema_30_handle_5m, 0, 0, 3, ema_30_buffer_5m);
       CopyBuffer(ema_65_handle_5m, 0, 0, 3, ema_65_buffer_5m);
       CopyBuffer(ema_200_handle_5m, 0, 0, 3, ema_200_buffer_5m);
-      CopyBuffer(rsi_handle_5m, 0, 0, 3, rsi_buffer_5m);
 
       if(CheckPositionOpen() == "none"){
          if(long_allowed){
@@ -302,14 +289,6 @@ void OnTick(){
          }
 
          if(CheckPositionOpen() == "long"){
-            if(rsi_pyramiding_allowed){
-               // Check if add position
-               if(rsi_buffer_5m[2] < rsi_buffer_5m[1] &&
-               rsi_buffer_5m[2] < rsi_value_long){
-                  OpenLong("");
-               }
-            }
-
             // Check TP
             if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
                closeAllOrders();
