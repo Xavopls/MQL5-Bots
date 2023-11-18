@@ -1,4 +1,12 @@
 /*
+--------------------------------- DISCLAIMER ---------------------------------
+Input values hardcoded in this strategy are meaningless.
+These are coded in order to be able to compile the strategy.
+Appropiate inputs are obtained through backtesting and parameter optimization.
+------------------------------------------------------------------------------
+
+Asset: SPY
+
 - LONG
    - Entry
       - 5m EMA 15[1] > 5m EMA 30[1] > 5m EMA 65[1] > 5m EMA 200[1] 
@@ -20,6 +28,7 @@
 
    - SL
       - Maximum of last X 5M candles
+
 */
 
 #include <Trade/Trade.mqh>
@@ -91,14 +100,10 @@ void CloseOrder(){
 }
 
 // Check close long
-void CheckExitLong(){
-
-}
+void CheckExitLong(){}
 
 // Check close long
-void CheckExitShort(){
-
-}
+void CheckExitShort(){}
 
 // Check if last bar is completed, eg. new bar created
 bool isNewBar(){
