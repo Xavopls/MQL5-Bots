@@ -228,7 +228,7 @@ void CheckIfPartialClose(){
 
                // Check if partial profit reached
                if(position_current_profit_distance > position_sl_distance * partial_tp_ratio){
-                  trade.PositionClosePartial(position.Ticket(), position_volume * (partial_percentage / 100));
+                  trade.PositionClosePartial(position.Ticket(), MathRound(position_volume * (partial_percentage / 100)));
                   ArrayResize(partial_closed_tickets, ArraySize(partial_closed_tickets)+1);
                   ArrayFill(partial_closed_tickets, ArraySize(partial_closed_tickets)-1, 1, position.Ticket());
                }
