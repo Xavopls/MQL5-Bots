@@ -224,8 +224,12 @@ void CheckIfPartialClose(){
                // Check if partial profit reached
                if(position_current_profit_distance > position_sl_distance * partial_tp_ratio){
                   trade.PositionClosePartial(position.Ticket(), MathRound(position_volume * (partial_percentage / 100)));
-                  ArrayResize(partial_closed_tickets, ArraySize(partial_closed_tickets)+1);
+                  ArrayResize(partial_closed_tickets, ArraySize(partial_closed_tickets) + 1);
                   ArrayFill(partial_closed_tickets, ArraySize(partial_closed_tickets)-1, 1, position.Ticket());
+                  // Set a buffer to not overload the array
+                  if(ArraySize(partial_closed_tickets) > 10){
+                     ArrayRemove(partial_closed_tickets, 0, 1);
+                  }
                }
             }
          }
@@ -326,15 +330,4 @@ void OnChartEvent(const int id,
                   const double &dparam,
                   const string &sparam){}
 
-void OnDeinit(const int reason){
-      for(int i=0; i < ArraySize(partial_closed_tickets)-1; i++){
-         Print(partial_closed_tickets[i]);
-      }
-   Print(SymbolInfoDouble(asset, SYMBOL_TRADE_CONTRACT_SIZE));
-   EventKillTimer();}
-
-/* todo
-
-- Clean partial_closed_tickets array when the whole operation is closed. (through OnTradeTransaction)
-
-*/
+void OnDeinit(const int reason){EventKillTimer();}
