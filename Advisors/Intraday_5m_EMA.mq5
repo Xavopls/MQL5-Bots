@@ -45,7 +45,6 @@ Utils utils;
 // Global variables
 string asset = Symbol();
 ENUM_TIMEFRAMES period = Period();
-bool real_account_permitted = false;
 bool async_trading_permitted = false;
 int bars_total;
 double partial_closed_tickets[];
@@ -60,16 +59,17 @@ double ema_65_buffer_5m[];
 double ema_200_buffer_5m[];
 
 // Static inputs
+sinput bool live_trading_allowed = false;       // Live trading allowed
 sinput bool short_allowed = true;               // Short allowed
 sinput bool long_allowed = true;                // Long allowed
 sinput bool partial_exits_allowed = true;       // Partial exits allowed
 
 // Input variables
-input float equity_percentage_per_trade = 40;   // Equity percentage per trade
-input int candles_sl_long = 5;                  // Amount of candles to get last Min for Long SL
-input int candles_sl_short = 5;                 // Amount of candles to get last Min for Short SL
-input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial exit
-input double partial_percentage = 50;           // Position size in % to reduce when partially closing
+input float equity_percentage_per_trade = 80;   // Equity percentage per trade
+input int candles_sl_long = 6;                  // Amount of candles to get last Min for Long SL
+input int candles_sl_short = 3;                 // Amount of candles to get last Min for Short SL
+input double partial_tp_ratio = 4.5;            // Ratio SL:TP of the partial exit
+input double partial_percentage = 75;           // Position size in % to reduce when partially closing
 
 // Open long position
 void OpenLong(string comment){
@@ -154,29 +154,29 @@ double GetSlShort(){
 }
 
 void closeAllOrders(){
-   for(int i = PositionsTotal() - 1; i >= 0; i--) // loop all Open Positions
-      if(position.SelectByIndex(i))  // select a position
-        {
-         trade.PositionClose(position.Ticket()); // then close it --period
-         Sleep(100); // Relax for 100 ms
-        }
-   //--End  Positions
+   // Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         trade.PositionClose(position.Ticket());
+         Sleep(100);
+      }
+   }
 
-   //-- Orders
-   for(int i = OrdersTotal() - 1; i >= 0; i--) // loop all Orders
-      if(order.SelectByIndex(i))  // select an order
-        {
-         trade.OrderDelete(order.Ticket()); // then delete it --period
-         Sleep(100); // Relax for 100 ms
-        }
-   //--End 
-   //-- Positions
-   for(int i = PositionsTotal() - 1; i >= 0; i--) // loop all Open Positions
-      if(position.SelectByIndex(i))  // select a position
-        {
-         trade.PositionClose(position.Ticket()); // then close it --period
-         Sleep(100); // Relax for 100 ms
-        }
+   // Close Orders
+   for(int i = OrdersTotal() - 1; i >= 0; i--){ 
+      if(order.SelectByIndex(i)){
+         trade.OrderDelete(order.Ticket()); 
+         Sleep(100); 
+      }
+   }
+
+   // 2nd iteration of Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         trade.PositionClose(position.Ticket()); 
+         Sleep(100); 
+      }
+   }
 }
 
 // Check is account is real or demo
@@ -239,7 +239,7 @@ void CheckIfPartialClose(){
 
 int OnInit(){
    // If real account is not permitted, exit
-   if(!real_account_permitted) {
+   if(!live_trading_allowed) {
       if(isAccountReal()){
          return(-1);
       }
