@@ -1,4 +1,13 @@
-// Scotty did it again: https://www.youtube.com/watch?v=DMaFprJsAMc
+/* 
+Entry (Long)
+   - 
+SL (Long)
+   - If current candle is lowest in X candles, and the entire last candle is within the bb, go with a bigger position and sharp SL
+   - If there are lower candles before, use the last low as SL
+
+TP (Long)
+   - BB Middle band
+*/
 
 #include <Trade/Trade.mqh>
 #include <Trade/AccountInfo.mqh>
@@ -8,28 +17,20 @@
 CTrade trade;
 ulong pos_ticket;
 
+// Inputs
+input int bb_length = 100;                   // BB length
+input double bb_std_dev = 2.2;               // BB Std. dev
+input double tp_percentage = 6.9;            // TP in %
+input double sl_percentage = 6.9;            // SL in %
+
 // Global variables
+float pos_size = 0.5;
 int bars_total;
 bool real_account_permitted = false;
 bool async_trading_permitted = false;
 int bb_handle;
 double bb_upper_buffer[];
 double bb_lower_buffer[];
-int rsi_handle;
-double rsi_buffer[];
-int stoch_handle;
-double stoch_buffer[];
-int stoch_k;
-int stoch_d;
-int stoch_slowing;
-double current_sl;
-double pos_size = 0.1;
-
-// Optimizable parameters
-input int bb_length = 20;                    // BB length
-input double bb_std_dev = 2.2;               // BB Std. dev
-input double tp_percentage = 6.9;            // TP in %
-input double sl_percentage = 4;              // SL in %
 
 // Open long position
 void OpenLong(string comment){
@@ -42,6 +43,11 @@ void OpenLong(string comment){
 
 // Open short position
 void OpenShort(string comment){
+   double sl = GetSlShort(); 
+   double tp = GetTpShort();
+   double bid = SymbolInfoDouble(Symbol(), SYMBOL_BID);
+   trade.Sell(pos_size, Symbol(), bid, sl, 0, comment);
+   pos_ticket = trade.ResultOrder();
 }
 
 // Close position
@@ -81,19 +87,14 @@ string CheckPositionOpen(){
 
 // Get TP of long position
 double GetTpLong(){
-   double avg_price = (iHigh(Symbol(), Period(), 1) + iLow(Symbol(), Period(), 1)) / 2;
-   double tp = avg_price * (1 + tp_percentage * 0.01); 
-   return(tp);
+   return(0);
 }
 
 // Get SL of long position
 double GetSlLong(){
-   double avg_price = (iHigh(Symbol(), Period(), 1) + iLow(Symbol(), Period(), 1)) / 2;
-   double sl = avg_price * (1 - sl_percentage * 0.01);
-   return(sl);
+   return(0);
 }
 
-// Get TP of short position
 double GetTpShort(){
    return(0);
 }
@@ -117,6 +118,14 @@ bool isAccountReal(){
    }
 }
 
+double getLastMin(int candles){
+   return(iLow(Symbol(), Period(), iLowest(Symbol(), Period(), MODE_LOW, candles, 1)));
+}
+
+double getLastMax(int candles){
+   return(iHigh(Symbol(), Period(), iHighest(Symbol(), Period(), MODE_LOW, candles, 1)));
+}
+
 int OnInit(){
    // If real account is not permitted, exit
    if(!real_account_permitted) {
@@ -130,22 +139,17 @@ int OnInit(){
 
    // Init indicators
    bb_handle = iBands(Symbol(), Period(), bb_length, 0, bb_std_dev, PRICE_CLOSE);
+
+
    return(INIT_SUCCEEDED);
 }
 
+
+
+
 void OnTick(){
    if(isNewBar()){
-      // Get price data and indicator values per tick
-      CopyBuffer(bb_handle, 1, 0, 1, bb_upper_buffer);
-      ArraySetAsSeries(bb_upper_buffer, true);
-      double close = iClose(Symbol(),Period(), 1);
-      
-      // Check for open longs
-      if(bb_upper_buffer[0] < close) {
-         if(CheckPositionOpen() == "none"){
-            OpenLong("");
-         }
-      }
+
    }
 }
 

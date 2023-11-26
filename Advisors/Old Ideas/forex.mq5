@@ -5,37 +5,42 @@ These are coded in order to be able to compile the strategy.
 Appropiate inputs are obtained through backtesting and parameter optimization.
 ------------------------------------------------------------------------------
 
-Asset: SPY
+Asset: X
 
 - LONG
    - Entry
-      - 5m EMA 15[1] > 5m EMA 30[1] > 5m EMA 65[1] > 5m EMA 200[1] 
-      - 5m EMA 65[2] < 5m EMA 200[2] 
-
+      
    - TP
-      - 5m EMA 15[1] < 5m EMA 65[1]
 
    - SL
-      - Minimum of last X 5M candles
+
 
 - SHORT
+   
+   EMA 200 > EMA 100 > EMA 50 > EMA 26 > EMA 20 --> Activates flag
+
    - Entry
-      - 5m EMA 15[1] < 5m EMA 30[1] < 5m EMA 65[1] < 5m EMA 200[1] 
-      - 5m EMA 65[2] > 5m EMA 200[2] 
+      
+      - (High > EMA 200) AND (Close and Open < EMA 200) OR  (Open > ema200) And (Close < ema200)
+      - EMA 200 > EMA 100 > EMA 50
+      - Flag activated
 
    - TP
-      - 5m EMA 15[1] > 5m EMA 65[1]
-
+     - X pips
    - SL
-      - Maximum of last X 5M candles
+      - Last max from X candles
+     
 
 */
+#property version     "1.00" 
+#property link "https://github.com/Xavopls"
+#property copyright "Xavi Olivares"
+#property description ""
 
 #include <Trade/Trade.mqh>
 #include <Trade/AccountInfo.mqh>
-#property tester_everytick_calculate
-#include <Arrays/List.mqh>
 #include "../Libraries/Utils.mq5"
+
 CTrade trade;
 ulong pos_ticket;
 CPositionInfo position; 
@@ -45,38 +50,44 @@ Utils utils;
 // Global variables
 string asset = Symbol();
 ENUM_TIMEFRAMES period = Period();
-bool real_account_permitted = false;
 bool async_trading_permitted = false;
 int bars_total;
 double partial_closed_tickets[];
 
-int ema_15_handle_5m;
-int ema_30_handle_5m;
-int ema_65_handle_5m;
-int ema_200_handle_5m;
-double ema_15_buffer_5m[];
-double ema_30_buffer_5m[]; 
-double ema_65_buffer_5m[]; 
-double ema_200_buffer_5m[];
-
 // Static inputs
 sinput bool short_allowed = true;               // Short allowed
-sinput bool long_allowed = true;                // Long allowed
-sinput bool partial_exits_allowed = true;       // Partial exits allowed
+sinput bool long_allowed = false;               // Long allowed
+sinput bool partial_exits_allowed = false;      // Partial exits allowed
+sinput bool live_trading_allowed = false;       // Live trading allowed
 
 // Input variables
 input float equity_percentage_per_trade = 40;   // Equity percentage per trade
-input int candles_sl_long = 5;                  // Amount of candles to get last Min for Long SL
-input int candles_sl_short = 5;                 // Amount of candles to get last Min for Short SL
 input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial exit
 input double partial_percentage = 50;           // Position size in % to reduce when partially closing
+input int candles_sl_short = 3;
+input double tp_short = 0.001; 
+// This variable depends on the asset, must check
+int lots_per_unit = 5;
+
+int ema_26_handle;
+int ema_50_handle;
+int ema_100_handle;
+int ema_200_handle;
+
+double ema_26_buffer[];
+double ema_50_buffer[]; 
+double ema_100_buffer[]; 
+double ema_200_buffer[];
+
+bool short_flag = false;
 
 // Open long position
 void OpenLong(string comment){
    double sl = GetSlLong();
    double tp = GetTpLong();
    double ask = SymbolInfoDouble(asset, SYMBOL_ASK);
-   int size = utils.SharesToBuyPerMaxEquity(ask/5, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   // int size = utils.SharesToBuyPerMaxEquity(ask / lots_per_unit, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   int size = 2;
    if(trade.Buy(size, asset, ask, sl, tp, comment)){
       pos_ticket = trade.ResultOrder();
    }
@@ -87,23 +98,30 @@ void OpenShort(string comment){
    double sl = GetSlShort(); 
    double tp = GetTpShort();
    double bid = SymbolInfoDouble(asset, SYMBOL_BID);
-   int size = utils.SharesToBuyPerMaxEquity(bid/5, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   // int size = utils.SharesToBuyPerMaxEquity(bid / lots_per_unit, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   int size = 2;
    if(trade.Sell(size, asset, bid, sl, 0, comment)){
       pos_ticket = trade.ResultOrder();
    }
 }
 
-// Close position
+// Close last position
 void CloseOrder(){
    trade.PositionClose(pos_ticket);
    pos_ticket = 0;   
 }
 
 // Check close long
-void CheckExitLong(){}
+void CheckExitLong(){
 
-// Check close long
-void CheckExitShort(){}
+}
+
+// Check close short
+void CheckExitShort(){
+   if(ema_26_buffer[1] > ema_50_buffer[1]){
+      closeAllOrders();
+   }
+}
 
 // Check if last bar is completed, eg. new bar created
 bool isNewBar(){
@@ -115,7 +133,7 @@ bool isNewBar(){
    return(false);
 }
 
-// Check if position is open, only works with 1 position opened max
+// Check if position is open, checks the last one executed
 string CheckPositionOpen(){
    PositionSelectByTicket(pos_ticket);
    int posType = (int)PositionGetInteger(POSITION_TYPE);
@@ -141,11 +159,12 @@ double GetTpLong(){
 
 // Get SL of long position
 double GetSlLong(){
-   return(iLow(asset, Period(), iLowest(asset, Period(), MODE_LOW, candles_sl_long, 1)));
+   return(0);
 }
 
+// Get TP of short position
 double GetTpShort(){
-   return(0);
+   return(MathAbs(iOpen(asset, period, 1) - iClose(asset, period, 1)) - tp_short);
 }
 
 // Get SL of short position
@@ -153,33 +172,34 @@ double GetSlShort(){
    return(iHigh(asset, Period(), iHighest(asset, Period(), MODE_LOW, candles_sl_short, 1)));
 }
 
+// Close all the open orders and positions
 void closeAllOrders(){
-   for(int i = PositionsTotal() - 1; i >= 0; i--) // loop all Open Positions
-      if(position.SelectByIndex(i))  // select a position
-        {
-         trade.PositionClose(position.Ticket()); // then close it --period
-         Sleep(100); // Relax for 100 ms
-        }
-   //--End  Positions
+   // Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         trade.PositionClose(position.Ticket());
+         Sleep(100);
+      }
+   }
 
-   //-- Orders
-   for(int i = OrdersTotal() - 1; i >= 0; i--) // loop all Orders
-      if(order.SelectByIndex(i))  // select an order
-        {
-         trade.OrderDelete(order.Ticket()); // then delete it --period
-         Sleep(100); // Relax for 100 ms
-        }
-   //--End 
-   //-- Positions
-   for(int i = PositionsTotal() - 1; i >= 0; i--) // loop all Open Positions
-      if(position.SelectByIndex(i))  // select a position
-        {
-         trade.PositionClose(position.Ticket()); // then close it --period
-         Sleep(100); // Relax for 100 ms
-        }
+   // Close Orders
+   for(int i = OrdersTotal() - 1; i >= 0; i--){ 
+      if(order.SelectByIndex(i)){
+         trade.OrderDelete(order.Ticket()); 
+         Sleep(100); 
+      }
+   }
+
+   // 2nd iteration of Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         trade.PositionClose(position.Ticket()); 
+         Sleep(100); 
+      }
+   }
 }
 
-// Check is account is real or demo
+// Check if account is real or demo
 bool isAccountReal(){
    CAccountInfo account;
    long login = account.Login();
@@ -192,6 +212,8 @@ bool isAccountReal(){
       return(false);
    }
 }
+
+// Check if current trade is already partially closed
 bool IsAlreadyPartiallyClosed(double ticket){
    for(int i=0; i < ArraySize(partial_closed_tickets); i++){
       if(ticket == partial_closed_tickets[i]){
@@ -201,6 +223,7 @@ bool IsAlreadyPartiallyClosed(double ticket){
    return(false);
 }
 
+// Partial close method
 void CheckIfPartialClose(){
    // Init variables 
    double 
@@ -239,7 +262,7 @@ void CheckIfPartialClose(){
 
 int OnInit(){
    // If real account is not permitted, exit
-   if(!real_account_permitted) {
+   if(!live_trading_allowed) {
       if(isAccountReal()){
          return(-1);
       }
@@ -248,15 +271,16 @@ int OnInit(){
    // Async trades setup
    trade.SetAsyncMode(async_trading_permitted);
 
-   ema_15_handle_5m = iMA(asset, period, 15, 0, MODE_EMA, PRICE_CLOSE);
-   ema_30_handle_5m = iMA(asset, period, 30, 0, MODE_EMA, PRICE_CLOSE);
-   ema_65_handle_5m = iMA(asset, period, 65, 0, MODE_EMA, PRICE_CLOSE);
-   ema_200_handle_5m = iMA(asset, period, 200, 0, MODE_EMA, PRICE_CLOSE);
+   // Init indicators
+   ema_26_handle = iMA(asset, period, 26, 0, MODE_EMA, PRICE_CLOSE);
+   ema_50_handle = iMA(asset, period, 50, 0, MODE_EMA, PRICE_CLOSE);
+   ema_100_handle = iMA(asset, period, 100, 0, MODE_EMA, PRICE_CLOSE);
+   ema_200_handle = iMA(asset, period, 200, 0, MODE_EMA, PRICE_CLOSE);
 
-   ArraySetAsSeries(ema_15_buffer_5m, true);
-   ArraySetAsSeries(ema_30_buffer_5m, true);
-   ArraySetAsSeries(ema_65_buffer_5m, true);
-   ArraySetAsSeries(ema_200_buffer_5m, true);
+   ArraySetAsSeries(ema_26_buffer, true);
+   ArraySetAsSeries(ema_50_buffer, true);
+   ArraySetAsSeries(ema_100_buffer, true);
+   ArraySetAsSeries(ema_200_buffer, true);
 
    return(INIT_SUCCEEDED);
 }
@@ -264,30 +288,49 @@ int OnInit(){
 void OnTick(){
    if(isNewBar()){
 
-      CopyBuffer(ema_15_handle_5m, 0, 0, 3, ema_15_buffer_5m);
-      CopyBuffer(ema_30_handle_5m, 0, 0, 3, ema_30_buffer_5m);
-      CopyBuffer(ema_65_handle_5m, 0, 0, 3, ema_65_buffer_5m);
-      CopyBuffer(ema_200_handle_5m, 0, 0, 3, ema_200_buffer_5m);
+      // Update indicators
+      CopyBuffer(ema_26_handle, 0, 0, 2, ema_26_buffer);
+      CopyBuffer(ema_50_handle, 0, 0, 2, ema_50_buffer);
+      CopyBuffer(ema_100_handle, 0, 0, 2, ema_100_buffer);
+      CopyBuffer(ema_200_handle, 0, 0, 2, ema_200_buffer);
+
 
       if(CheckPositionOpen() == "none"){
          if(long_allowed){
-            // Check for longs
-            if(ema_15_buffer_5m[1] > ema_30_buffer_5m[1] &&
-            ema_30_buffer_5m[1] > ema_65_buffer_5m[1] &&
-            ema_65_buffer_5m[1] > ema_200_buffer_5m[1] &&
-            ema_65_buffer_5m[2] < ema_200_buffer_5m[2]){
+            // Check entries for long positions
+            if(1){
                OpenLong("");
             }
          }
 
          if(short_allowed){
-            // Check for shorts
-            if(ema_15_buffer_5m[1] < ema_30_buffer_5m[1] &&
-            ema_30_buffer_5m[1] < ema_65_buffer_5m[1] &&
-            ema_65_buffer_5m[1] < ema_200_buffer_5m[1] &&
-            ema_65_buffer_5m[2] > ema_200_buffer_5m[2]){
-               OpenShort("");
+            // Check entries for short positions
+            if(ema_200_buffer[1] > ema_100_buffer[1] &&
+            ema_100_buffer[1] > ema_50_buffer[1] &&
+            ema_50_buffer[1] > ema_26_buffer[1]){
+               short_flag = true;
             }
+
+            if(ema_26_buffer[1] > ema_100_buffer[1]){
+               short_flag = false;
+            }
+
+            if(short_flag &&
+            ema_200_buffer[1] > ema_100_buffer[1] &&
+            ema_100_buffer[1] > ema_50_buffer[1]){
+               
+               if(iHigh(asset, period, 1) > ema_200_buffer[1] &&
+               iClose(asset, period, 1) < ema_200_buffer[1] &&
+               iOpen(asset, period, 1) < ema_200_buffer[1]){
+                  OpenShort("");
+               }
+
+               if(iClose(asset, period, 1) < ema_200_buffer[1] &&
+               iOpen(asset, period, 1) > ema_200_buffer[1]){
+                  OpenShort("");
+               }
+            }
+
          }
       }
 
@@ -297,23 +340,24 @@ void OnTick(){
             CheckIfPartialClose();
          }
 
+         // Check exits for long positions
          if(CheckPositionOpen() == "long"){
             // Check TP
-            if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
-               closeAllOrders();
-            }
+            // if(1){
+            //    closeAllOrders();
+            // }
          }
-
+         // Check exits for short positions
          if(CheckPositionOpen() == "short"){
             // Check TP
-            if(ema_15_buffer_5m[1] > ema_65_buffer_5m[1]){
-               closeAllOrders();
-            }
+            // if(1){
+            //    closeAllOrders();
+            // }
+            CheckExitShort();
          }
       }
    }
 }
-
 
 void OnTimer(){}
 

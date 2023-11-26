@@ -5,31 +5,46 @@ These are coded in order to be able to compile the strategy.
 Appropiate inputs are obtained through backtesting and parameter optimization.
 ------------------------------------------------------------------------------
 
-Asset: SPY
+Asset: GBPJPY
 
-- LONG OR SHORT
-   - Entry
-      - Wait X candles after session starts
-      - If close[1] > daily vwap, go long
-      - If close[1] < daily vwap, go short
+- LONG
+   - Entry Horizontal
+      - Min < Lower BB
+      - Close > Lower BB
+      - Open > Lower BB
+      - Std dev < X
+      - (Possible upgrade) Compare accumulated daily std dev with current
+
+   - Entry 2 Horizontal
+      - Open < Lower BB
+      - Close > Lower BB
+      -
+   - Entry 3 Breakout
+      - Close > Upper BB
+
    - TP
-      - Wait Y candles OR end session
+      - 
 
    - SL
-      - Last min or max respectively
-      - Check for trailing stop
+
+
+- SHORT
+   - Entry
+      
+   - TP
+     
+   - SL
+     
 
 */
-
 #property version     "1.00" 
-#property link "https://github.com/Xavopls"
+#property link    "https://github.com/Xavopls"
 #property copyright "Xavi Olivares"
 #property description ""
 
 #include <Trade/Trade.mqh>
 #include <Trade/AccountInfo.mqh>
-#include "../Libraries/Utils.mq5"
-#resource "\\Indicators\\vwap.ex5"
+#include "../../Libraries/Utils.mq5"
 
 CTrade trade;
 ulong pos_ticket;
@@ -45,29 +60,30 @@ int bars_total;
 double partial_closed_tickets[];
 
 // Static inputs
-sinput bool short_allowed = false;              // Short allowed
+sinput bool short_allowed = true;               // Short allowed
 sinput bool long_allowed = true;                // Long allowed
-sinput bool partial_exits_allowed = false;      // Partial exits allowed
+sinput bool partial_exits_allowed = true;       // Partial exits allowed
 sinput bool live_trading_allowed = false;       // Live trading allowed
+sinput bool std_dev_allowed = false;               // Standard deviation is being used
 
 // Input variables
 input float equity_percentage_per_trade = 40;   // Equity percentage per trade
 input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial exit
 input double partial_percentage = 50;           // Position size in % to reduce when partially closing
-input int candles_to_wait_entry = 3;            // Candles to wait after the session starts to entry
-input int candles_to_wait_exit = 8;             // Candles to wait after the trade to exit
-input bool wait_until_session_ends = false;     // Exit only when session ends
-input bool trailing_stop_activated = false;     // Trailing stop activated
-input int trailing_stop_candles_lookback = 3;   // Trailing stop candles lookback
-input bool sl_session_start = false;            // SL as the first candle of session
+input int bbs_period = 2;                       // BBs Period
+input double bbs_std_dev = 2;                   // BBs Std Dev
+input double std_dev_period = 0.1;              // Price Std Dev Period
+input double max_std_dev_value = 0.1;           // Max Std Dev to enter long
 
 // This variable depends on the asset, must check
 int lots_per_unit = 5;
 
-int vwap_daily_handle;
-double vwap_daily_buffer[];
-int candle_count_since_session_start = 0;
-bool trading_activated = false;
+int bbs_handle;
+int std_dev_handle;
+double bbs_upper_buffer[];
+double bbs_lower_buffer[];
+double std_dev_buffer[];
+
 
 // Open long position
 void OpenLong(string comment){
@@ -252,75 +268,70 @@ int OnInit(){
       }
    }
 
-   if((candles_to_wait_entry + candles_to_wait_exit) > 77) {
-      return(-1);
-   }
-
    // Async trades setup
    trade.SetAsyncMode(async_trading_permitted);
 
    // Init indicators
-   vwap_daily_handle = iCustom(asset, period, "::Indicators\\vwap.ex5","vwap", 6, true, false, false);
-   if(vwap_daily_handle==INVALID_HANDLE){
-      Print("Expert: iCustom call: Error code=", GetLastError());
-      return(INIT_FAILED);
-     }
+   bbs_handle = iBands(asset, period, bbs_period, 0, bbs_std_dev, PRICE_CLOSE);
+   std_dev_handle = iStdDev(asset, period, std_dev_period, 0, MODE_SMA, PRICE_CLOSE);
+
    return(INIT_SUCCEEDED);
 }
 
 void OnTick(){
    if(isNewBar()){
 
-
+      // Update indicators
+      CopyBuffer(bbs_handle, 1, 0, 1, bbs_upper_buffer);
+      CopyBuffer(bbs_handle, 2, 0, 1, bbs_lower_buffer);
+      CopyBuffer(std_dev_handle, 0, 0, 1, std_dev_buffer);
 
       if(CheckPositionOpen() == "none"){
-
-         if(TimeToString(TimeCurrent(), TIME_MINUTES) == "16:30"){
-            candle_count_since_session_start = 0;
-            trading_activated = true;
-         }
-
-         if(trading_activated){
-            if(candle_count_since_session_start == candles_to_wait_entry){
-               if(long_allowed){
-                  // Check entries for long positions
-                  CopyBuffer(vwap_daily_handle, 0, 0, 2, vwap_daily_buffer);
-                  ArraySetAsSeries(vwap_daily_buffer, true);
-                  if(iClose(asset, period, 1) > vwap_daily_buffer[1]){
+         if(long_allowed){
+            
+            if(iLow(asset, period, 1) < bbs_lower_buffer[1] &&
+            iOpen(asset, period, 1) > bbs_lower_buffer[1] &&
+            iClose(asset, period, 1) > bbs_lower_buffer[1]){
+               if(std_dev_allowed){
+                  if(std_dev_buffer[1] < max_std_dev_value){
                      OpenLong("");
                   }
                }
-
-               if(short_allowed){
-                  // Check entries for short positions
-                  CopyBuffer(vwap_daily_handle, 0, 0, 2, vwap_daily_buffer);
-                  ArraySetAsSeries(vwap_daily_buffer, true);
-                  if(iClose(asset, period, 1) < vwap_daily_buffer[1]){
-                     OpenShort("");
-                  }
+               else{
+                  OpenLong("");
                }
+            }
+         }
+
+         if(short_allowed){
+            // Check entries for short positions
+            if(1){
+               OpenShort("");
             }
          }
       }
 
       else {
-         if(wait_until_session_ends){
-            if(TimeToString(TimeCurrent(), TIME_MINUTES) == "22:50"){
-               closeAllOrders();
-            }
-         }
-
-         else if((candle_count_since_session_start - candles_to_wait_entry) == candles_to_wait_exit){
-            closeAllOrders();
-         }
-
          // Check if any trade has reached the partial objective
          if(partial_exits_allowed){
             CheckIfPartialClose();
          }
 
+         // Check exits for long positions
+         if(CheckPositionOpen() == "long"){
+            // Check TP
+            if(1){
+               closeAllOrders();
+            }
+         }
+         // Check exits for short positions
+         if(CheckPositionOpen() == "short"){
+            // Check TP
+            if(1){
+               closeAllOrders();
+            }
+         }
       }
-      candle_count_since_session_start += 1;
    }
 }
 
