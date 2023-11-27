@@ -15,6 +15,17 @@ Asset: GBPJPY
       - Std dev < X
       - (Possible upgrade) Compare accumulated daily std dev with current
 
+
+   - TP
+      - Max > Upper BB
+      - Open > EMA 12 && Close < EMA 12
+      - Open > EMA 20 && Close < EMA 20
+      - X points
+
+   - SL
+
+
+
    - Entry 2 Horizontal
       - Open < Lower BB
       - Close > Lower BB
@@ -22,10 +33,6 @@ Asset: GBPJPY
    - Entry 3 Breakout
       - Close > Upper BB
 
-   - TP
-      - 
-
-   - SL
 
 
 - SHORT
@@ -64,7 +71,17 @@ sinput bool short_allowed = true;               // Short allowed
 sinput bool long_allowed = true;                // Long allowed
 sinput bool partial_exits_allowed = true;       // Partial exits allowed
 sinput bool live_trading_allowed = false;       // Live trading allowed
-sinput bool std_dev_allowed = false;               // Standard deviation is being used
+sinput bool std_dev_allowed = false;            // Standard deviation is being used
+
+enum TP_TYPE
+{
+    upper_bb, // Upper BB
+    ema12,    // EMA 12
+    ema20,    // EMA 20
+    x_points  // X points
+};
+
+input TP_TYPE tp_type = upper_bb; // TP Type
 
 // Input variables
 input float equity_percentage_per_trade = 40;   // Equity percentage per trade
@@ -72,14 +89,21 @@ input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial ex
 input double partial_percentage = 50;           // Position size in % to reduce when partially closing
 input int bbs_period = 2;                       // BBs Period
 input double bbs_std_dev = 2;                   // BBs Std Dev
-input double std_dev_period = 0.1;              // Price Std Dev Period
+input int std_dev_period = 20;                  // Price Std Dev Period
 input double max_std_dev_value = 0.1;           // Max Std Dev to enter long
+input int tp_pips = 10;                         // TP in Pips
+input int sl_pips = 10;                         // SL in Pips
 
 // This variable depends on the asset, must check
 int lots_per_unit = 5;
 
 int bbs_handle;
 int std_dev_handle;
+int ema12_handle;
+int ema20_handle;
+
+double ema12_buffer[];
+double ema20_buffer[];
 double bbs_upper_buffer[];
 double bbs_lower_buffer[];
 double std_dev_buffer[];
@@ -88,7 +112,10 @@ double std_dev_buffer[];
 // Open long position
 void OpenLong(string comment){
    double sl = GetSlLong();
-   double tp = GetTpLong();
+   double tp = 0;
+   if(tp_type == x_points){
+      tp = GetTpLong();
+   }
    double ask = SymbolInfoDouble(asset, SYMBOL_ASK);
    int size = utils.SharesToBuyPerMaxEquity(ask / lots_per_unit, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
    if(trade.Buy(size, asset, ask, sl, tp, comment)){
@@ -115,7 +142,27 @@ void CloseOrder(){
 
 // Check close long
 void CheckExitLong(){
-
+   switch (tp_type){
+   case upper_bb:
+      if(iHigh(asset, period, 1) > bbs_upper_buffer[1]){
+         closeAllOrders();
+      }
+      break;
+   case ema12:
+      if(iOpen(asset, period, 1) > ema12_buffer[1] &&
+      iClose(asset, period, 1) < ema12_buffer[1]){
+         closeAllOrders();
+      }
+      break;
+   case ema20:
+      if(iOpen(asset, period, 1) > ema20_buffer[1] &&
+      iClose(asset, period, 1) < ema20_buffer[1]){
+         closeAllOrders();
+      }
+      break;
+   default:
+      break;
+   }
 }
 
 // Check close short
@@ -154,12 +201,12 @@ string CheckPositionOpen(){
 
 // Get TP of long position
 double GetTpLong(){
-   return(0);
+   return(SymbolInfoDouble(asset, SYMBOL_ASK) + tp_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
 }
 
 // Get SL of long position
 double GetSlLong(){
-   return(0);
+   return(SymbolInfoDouble(asset, SYMBOL_ASK) - sl_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
 }
 
 // Get TP of short position
@@ -274,6 +321,11 @@ int OnInit(){
    // Init indicators
    bbs_handle = iBands(asset, period, bbs_period, 0, bbs_std_dev, PRICE_CLOSE);
    std_dev_handle = iStdDev(asset, period, std_dev_period, 0, MODE_SMA, PRICE_CLOSE);
+   ema12_handle = iMA(asset, period, 12, 0, MODE_EMA, PRICE_CLOSE);
+   ema20_handle = iMA(asset, period, 20, 0, MODE_EMA, PRICE_CLOSE);
+
+   ArraySetAsSeries(ema12_buffer, true);
+   ArraySetAsSeries(ema20_buffer, true);
 
    return(INIT_SUCCEEDED);
 }
@@ -285,6 +337,17 @@ void OnTick(){
       CopyBuffer(bbs_handle, 1, 0, 1, bbs_upper_buffer);
       CopyBuffer(bbs_handle, 2, 0, 1, bbs_lower_buffer);
       CopyBuffer(std_dev_handle, 0, 0, 1, std_dev_buffer);
+
+      switch(tp_type){
+         case ema12:
+            CopyBuffer(ema12_handle, 0, 0, 1, ema12_buffer);
+            break;
+         case ema20:
+            CopyBuffer(ema20_handle, 0, 0, 1, ema20_buffer);
+            break;
+         default:
+            break;
+      }
 
       if(CheckPositionOpen() == "none"){
          if(long_allowed){
@@ -320,16 +383,14 @@ void OnTick(){
          // Check exits for long positions
          if(CheckPositionOpen() == "long"){
             // Check TP
-            if(1){
-               closeAllOrders();
-            }
+            CheckExitLong();
          }
          // Check exits for short positions
          if(CheckPositionOpen() == "short"){
             // Check TP
-            if(1){
-               closeAllOrders();
-            }
+            // if(1){
+            //    closeAllOrders();
+            // }
          }
       }
    }
