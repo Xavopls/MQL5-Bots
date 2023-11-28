@@ -8,32 +8,17 @@ Appropiate inputs are obtained through backtesting and parameter optimization.
 Asset: GBPJPY
 
 - LONG
-   - Entry Horizontal
-      - Min < Lower BB
-      - Close > Lower BB
-      - Open > Lower BB
-      - Std dev < X
-      - (Possible upgrade) Compare accumulated daily std dev with current
-
+   - Entry Breakout
+      - Close > Upper BB
+      - Open < Upper BB
 
    - TP
-      - Max > Upper BB
+      - Open > Upper BB && Close < Upper BB
       - Open > EMA 12 && Close < EMA 12
       - Open > EMA 20 && Close < EMA 20
       - X points
 
    - SL
-
-
-
-   - Entry 2 Horizontal
-      - Open < Lower BB
-      - Close > Lower BB
-      -
-   - Entry 3 Breakout
-      - Close > Upper BB
-
-
 
 - SHORT
    - Entry
@@ -44,6 +29,7 @@ Asset: GBPJPY
      
 
 */
+
 #property version     "1.00" 
 #property link    "https://github.com/Xavopls"
 #property copyright "Xavi Olivares"
@@ -93,7 +79,6 @@ input int std_dev_period = 20;                  // Price Std Dev Period
 input double max_std_dev_value = 0.1;           // Max Std Dev to enter long
 input int tp_pips = 10;                         // TP in Pips
 input int sl_pips = 300;                        // SL in Pips
-input int entry_type_long = 1;                  // Entry type
 
 // This variable depends on the asset, must check
 int lots_per_unit = 5;
@@ -106,7 +91,6 @@ int ema20_handle;
 double ema12_buffer[];
 double ema20_buffer[];
 double bbs_upper_buffer[];
-double bbs_lower_buffer[];
 double std_dev_buffer[];
 
 
@@ -146,7 +130,8 @@ void CloseOrder(){
 void CheckExitLong(){
    switch (tp_type){
    case upper_bb:
-      if(iHigh(asset, period, 1) > bbs_upper_buffer[1]){
+      if(iOpen(asset, period, 1) > bbs_upper_buffer[1] &&
+      iClose(asset, period, 1) < bbs_upper_buffer[1]){
          closeAllOrders();
       }
       break;
@@ -337,7 +322,6 @@ void OnTick(){
 
       // Update indicators
       CopyBuffer(bbs_handle, 1, 0, 2, bbs_upper_buffer);
-      CopyBuffer(bbs_handle, 2, 0, 2, bbs_lower_buffer);
       CopyBuffer(std_dev_handle, 0, 0, 2, std_dev_buffer);
 
       switch(tp_type){
@@ -353,33 +337,18 @@ void OnTick(){
 
       if(CheckPositionOpen() == "none"){
          if(long_allowed){
-            if(entry_type_long == 1){
-               if(iLow(asset, period, 1) < bbs_lower_buffer[1] &&
-               iOpen(asset, period, 1) > bbs_lower_buffer[1] &&
-               iClose(asset, period, 1) > bbs_lower_buffer[1]){
-                  if(std_dev_allowed){
-                     if(std_dev_buffer[1] < max_std_dev_value){
-                        OpenLong("");
-                     }
-                  }
-                  else{
+            if(iOpen(asset, period, 1) < bbs_upper_buffer[1] &&
+            iClose(asset, period, 1) > bbs_upper_buffer[1]){
+               if(std_dev_allowed){
+                  if(std_dev_buffer[1] < max_std_dev_value){
                      OpenLong("");
                   }
                }
-            }
-            if(entry_type_long == 2){
-               if(iOpen(asset, period, 1) < bbs_lower_buffer[1] &&
-               iClose(asset, period, 1) > bbs_lower_buffer[1]){
-                  if(std_dev_allowed){
-                     if(std_dev_buffer[1] < max_std_dev_value){
-                        OpenLong("");
-                     }
-                  }
-                  else{
-                     OpenLong("");
-                  }
+               else{
+                  OpenLong("");
                }
             }
+            
          }
 
          if(short_allowed){
