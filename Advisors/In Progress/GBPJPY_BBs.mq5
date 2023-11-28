@@ -92,7 +92,7 @@ input double bbs_std_dev = 2;                   // BBs Std Dev
 input int std_dev_period = 20;                  // Price Std Dev Period
 input double max_std_dev_value = 0.1;           // Max Std Dev to enter long
 input int tp_pips = 10;                         // TP in Pips
-input int sl_pips = 10;                         // SL in Pips
+input int sl_pips = 300;                         // SL in Pips
 
 // This variable depends on the asset, must check
 int lots_per_unit = 5;
@@ -117,7 +117,8 @@ void OpenLong(string comment){
       tp = GetTpLong();
    }
    double ask = SymbolInfoDouble(asset, SYMBOL_ASK);
-   int size = utils.SharesToBuyPerMaxEquity(ask / lots_per_unit, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   // int size = utils.SharesToBuyPerMaxEquity(ask / lots_per_unit, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   double size = 0.25;
    if(trade.Buy(size, asset, ask, sl, tp, comment)){
       pos_ticket = trade.ResultOrder();
    }
@@ -334,16 +335,16 @@ void OnTick(){
    if(isNewBar()){
 
       // Update indicators
-      CopyBuffer(bbs_handle, 1, 0, 1, bbs_upper_buffer);
-      CopyBuffer(bbs_handle, 2, 0, 1, bbs_lower_buffer);
-      CopyBuffer(std_dev_handle, 0, 0, 1, std_dev_buffer);
+      CopyBuffer(bbs_handle, 1, 0, 2, bbs_upper_buffer);
+      CopyBuffer(bbs_handle, 2, 0, 2, bbs_lower_buffer);
+      CopyBuffer(std_dev_handle, 0, 0, 2, std_dev_buffer);
 
       switch(tp_type){
          case ema12:
-            CopyBuffer(ema12_handle, 0, 0, 1, ema12_buffer);
+            CopyBuffer(ema12_handle, 0, 0, 2, ema12_buffer);
             break;
          case ema20:
-            CopyBuffer(ema20_handle, 0, 0, 1, ema20_buffer);
+            CopyBuffer(ema20_handle, 0, 0, 2, ema20_buffer);
             break;
          default:
             break;
