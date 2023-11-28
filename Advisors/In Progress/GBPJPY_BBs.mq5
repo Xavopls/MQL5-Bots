@@ -92,7 +92,8 @@ input double bbs_std_dev = 2;                   // BBs Std Dev
 input int std_dev_period = 20;                  // Price Std Dev Period
 input double max_std_dev_value = 0.1;           // Max Std Dev to enter long
 input int tp_pips = 10;                         // TP in Pips
-input int sl_pips = 300;                         // SL in Pips
+input int sl_pips = 300;                        // SL in Pips
+input int entry_type_long = 1;                  // Entry type
 
 // This variable depends on the asset, must check
 int lots_per_unit = 5;
@@ -352,17 +353,31 @@ void OnTick(){
 
       if(CheckPositionOpen() == "none"){
          if(long_allowed){
-            
-            if(iLow(asset, period, 1) < bbs_lower_buffer[1] &&
-            iOpen(asset, period, 1) > bbs_lower_buffer[1] &&
-            iClose(asset, period, 1) > bbs_lower_buffer[1]){
-               if(std_dev_allowed){
-                  if(std_dev_buffer[1] < max_std_dev_value){
+            if(entry_type_long == 1){
+               if(iLow(asset, period, 1) < bbs_lower_buffer[1] &&
+               iOpen(asset, period, 1) > bbs_lower_buffer[1] &&
+               iClose(asset, period, 1) > bbs_lower_buffer[1]){
+                  if(std_dev_allowed){
+                     if(std_dev_buffer[1] < max_std_dev_value){
+                        OpenLong("");
+                     }
+                  }
+                  else{
                      OpenLong("");
                   }
                }
-               else{
-                  OpenLong("");
+            }
+            if(entry_type_long == 2){
+               if(iOpen(asset, period, 1) < bbs_lower_buffer[1] &&
+               iClose(asset, period, 1) > bbs_lower_buffer[1]){
+                  if(std_dev_allowed){
+                     if(std_dev_buffer[1] < max_std_dev_value){
+                        OpenLong("");
+                     }
+                  }
+                  else{
+                     OpenLong("");
+                  }
                }
             }
          }
