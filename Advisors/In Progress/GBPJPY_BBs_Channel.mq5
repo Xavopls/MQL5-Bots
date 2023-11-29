@@ -111,6 +111,7 @@ input int long_sl_pips = 300;                   // SL in Pips long
 input int short_sl_pips = 300;                  // SL in Pips short
 input int entry_type_long = 1;                  // Entry type long
 input int entry_type_short = 1;                 // Entry type short
+input int maximum_spread = 10;                  // Maximum spread allowed to operate 
 
 int bbs_handle;
 int std_dev_handle;
@@ -249,12 +250,12 @@ double GetSlLong(){
 
 // Get TP of short position
 double GetTpShort(){
-   return(SymbolInfoDouble(asset, SYMBOL_BID) - short_sl_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
+   return(SymbolInfoDouble(asset, SYMBOL_BID) - short_tp_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
 }
 
 // Get SL of short position
 double GetSlShort(){
-   return(SymbolInfoDouble(asset, SYMBOL_BID) + short_tp_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
+   return(SymbolInfoDouble(asset, SYMBOL_BID) + short_sl_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
 }
 
 // Close all the open orders and positions
@@ -373,7 +374,10 @@ void OnTick(){
       // Update indicators
       CopyBuffer(bbs_handle, 1, 0, 2, bbs_upper_buffer);
       CopyBuffer(bbs_handle, 2, 0, 2, bbs_lower_buffer);
-      CopyBuffer(std_dev_handle, 0, 0, 2, std_dev_buffer);
+      
+      if(std_dev_allowed){
+         CopyBuffer(std_dev_handle, 0, 0, 2, std_dev_buffer);
+      }
 
       if(long_allowed){
          switch(long_tp_type){
@@ -402,63 +406,66 @@ void OnTick(){
       }
 
       if(CheckPositionOpen() == "none"){
-         // Check for long entries
-         if(long_allowed){
-            if(entry_type_long == 1){
-               if(iLow(asset, period, 1) < bbs_lower_buffer[1] &&
-               iOpen(asset, period, 1) > bbs_lower_buffer[1] &&
-               iClose(asset, period, 1) > bbs_lower_buffer[1]){
-                  if(std_dev_allowed){
-                     if(std_dev_buffer[1] < max_std_dev_value){
+         if(maximum_spread > SymbolInfoInteger(asset, SYMBOL_SPREAD)){
+            // Check for long entries
+            if(long_allowed){
+               if(entry_type_long == 1){
+                  if(iLow(asset, period, 1) < bbs_lower_buffer[1] &&
+                  iOpen(asset, period, 1) > bbs_lower_buffer[1] &&
+                  iClose(asset, period, 1) > bbs_lower_buffer[1]){
+                     if(std_dev_allowed){
+                        if(std_dev_buffer[1] < max_std_dev_value){
+                           OpenLong("");
+                        }
+                     }
+                     else{
                         OpenLong("");
                      }
                   }
-                  else{
-                     OpenLong("");
-                  }
                }
-            }
-            if(entry_type_long == 2){
-               if(iOpen(asset, period, 1) < bbs_lower_buffer[1] &&
-               iClose(asset, period, 1) > bbs_lower_buffer[1]){
-                  if(std_dev_allowed){
-                     if(std_dev_buffer[1] < max_std_dev_value){
+               if(entry_type_long == 2){
+                  if(iOpen(asset, period, 1) < bbs_lower_buffer[1] &&
+                  iClose(asset, period, 1) > bbs_lower_buffer[1]){
+                     if(std_dev_allowed){
+                        if(std_dev_buffer[1] < max_std_dev_value){
+                           OpenLong("");
+                        }
+                     }
+                     else{
                         OpenLong("");
                      }
                   }
-                  else{
-                     OpenLong("");
-                  }
                }
             }
-         }
-         
-         // Check for short entries
-         if(short_allowed){
-            if(entry_type_short == 1){
-               if(iHigh(asset, period, 1) > bbs_upper_buffer[1] &&
-               iOpen(asset, period, 1) < bbs_upper_buffer[1] &&
-               iClose(asset, period, 1) < bbs_upper_buffer[1]){
-                  if(std_dev_allowed){
-                     if(std_dev_buffer[1] < max_std_dev_value){
+            
+            // Check for short entries
+            if(short_allowed){
+               if(entry_type_short == 1){
+                  if(iHigh(asset, period, 1) > bbs_upper_buffer[1] &&
+                  iOpen(asset, period, 1) < bbs_upper_buffer[1] &&
+                  iClose(asset, period, 1) < bbs_upper_buffer[1]){
+                     if(std_dev_allowed){
+                        if(std_dev_buffer[1] < max_std_dev_value){
+                           OpenShort("");
+                        }
+                     }
+                     else{
                         OpenShort("");
                      }
                   }
-                  else{
-                     OpenShort("");
-                  }
                }
-            }
-            if(entry_type_short == 2){
-               if(iOpen(asset, period, 1) > bbs_upper_buffer[1] &&
-               iClose(asset, period, 1) < bbs_upper_buffer[1]){
-                  if(std_dev_allowed){
-                     if(std_dev_buffer[1] < max_std_dev_value){
+
+               if(entry_type_short == 2){
+                  if(iOpen(asset, period, 1) > bbs_upper_buffer[1] &&
+                  iClose(asset, period, 1) < bbs_upper_buffer[1]){
+                     if(std_dev_allowed){
+                        if(std_dev_buffer[1] < max_std_dev_value){
+                           OpenShort("");
+                        }
+                     }
+                     else{
                         OpenShort("");
                      }
-                  }
-                  else{
-                     OpenShort("");
                   }
                }
             }
@@ -473,13 +480,11 @@ void OnTick(){
 
          // Check exits for long positions
          if(CheckPositionOpen() == "long"){
-            // Check TP
             CheckExitLong();
          }
-         
+
          // Check exits for short positions
          if(CheckPositionOpen() == "short"){
-            // Check TP
             CheckExitShort();
          }
       }
