@@ -8,24 +8,36 @@ Appropiate inputs are obtained through backtesting and parameter optimization.
 Asset: GBPJPY
 
 - LONG
-   - Entry Breakout
-      - Close > Upper BB
+   - Entry 
       - Open < Upper BB
+      - Close > Upper BB
 
    - TP
       - Open > Upper BB && Close < Upper BB
       - Open > EMA 12 && Close < EMA 12
       - Open > EMA 20 && Close < EMA 20
-      - X points
+      - X pips
 
    - SL
+      - 1: Min of last X candles
+      - 2: X pips 
+      
 
 - SHORT
-   - Entry
-      
+   - Entry 
+      - Open > Lower BB
+      - Close < Lower BB
+
    - TP
-     
+      - Open < Lower BB && Close > Lower BB
+      - Open < EMA 12 && Close > EMA 12
+      - Open < EMA 20 && Close > EMA 20
+      - X pips
+
    - SL
+      - 1: Max of last X candles
+      - 2: X pips 
+      
      
 
 */
@@ -57,17 +69,17 @@ sinput bool short_allowed = true;               // Short allowed
 sinput bool long_allowed = true;                // Long allowed
 sinput bool partial_exits_allowed = true;       // Partial exits allowed
 sinput bool live_trading_allowed = false;       // Live trading allowed
-sinput bool std_dev_allowed = false;            // Standard deviation is being used
 
 enum TP_TYPE
 {
-    upper_bb, // Upper BB
+    bb,       // Bollinger Band
     ema12,    // EMA 12
     ema20,    // EMA 20
     x_points  // X points
 };
 
-input TP_TYPE tp_type = upper_bb; // TP Type
+input TP_TYPE tp_type_short = bb; // TP Type Short
+input TP_TYPE tp_type_long = bb; // TP Type Long
 
 // Input variables
 input float equity_percentage_per_trade = 40;   // Equity percentage per trade
@@ -75,13 +87,15 @@ input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial ex
 input double partial_percentage = 50;           // Position size in % to reduce when partially closing
 input int bbs_period = 2;                       // BBs Period
 input double bbs_std_dev = 2;                   // BBs Std Dev
-input int std_dev_period = 20;                  // Price Std Dev Period
-input double max_std_dev_value = 0.1;           // Max Std Dev to enter long
-input int tp_pips = 10;                         // TP in Pips
-input int sl_pips = 300;                        // SL in Pips
+input int long_tp_pips = 10;                    // TP in Pips Long
+input int long_sl_pips = 300;                   // SL in Pips Long
+input int short_sl_pips = 10;                   // SL in Pips Short
+input int short_tp_pips = 10;                   // TP in Pips Short
+input int sl_short_candles = 10;                // Amount of candles to get the min to SL Short
+input int sl_long_candles = 3;                  // Amount of candles to get the min to SL Long
+input int sl_type = 1;                          // SL Type
+input int maximum_spread = 10;                  // Maximum spread allowed to operate 
 
-// This variable depends on the asset, must check
-int lots_per_unit = 5;
 
 int bbs_handle;
 int std_dev_handle;
@@ -91,18 +105,16 @@ int ema20_handle;
 double ema12_buffer[];
 double ema20_buffer[];
 double bbs_upper_buffer[];
-double std_dev_buffer[];
-
+double bbs_lower_buffer[];
 
 // Open long position
 void OpenLong(string comment){
    double sl = GetSlLong();
    double tp = 0;
-   if(tp_type == x_points){
+   if(tp_type_long == x_points){
       tp = GetTpLong();
    }
    double ask = SymbolInfoDouble(asset, SYMBOL_ASK);
-   // int size = utils.SharesToBuyPerMaxEquity(ask / lots_per_unit, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
    double size = 0.25;
    if(trade.Buy(size, asset, ask, sl, tp, comment)){
       pos_ticket = trade.ResultOrder();
@@ -112,9 +124,12 @@ void OpenLong(string comment){
 // Open short position
 void OpenShort(string comment){
    double sl = GetSlShort(); 
-   double tp = GetTpShort();
+   double tp = 0;
+   if(tp_type_short == x_points){
+      tp = GetTpShort();
+   }
    double bid = SymbolInfoDouble(asset, SYMBOL_BID);
-   int size = utils.SharesToBuyPerMaxEquity(bid / lots_per_unit, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   double size = 0.25;
    if(trade.Sell(size, asset, bid, sl, 0, comment)){
       pos_ticket = trade.ResultOrder();
    }
@@ -128,8 +143,8 @@ void CloseOrder(){
 
 // Check close long
 void CheckExitLong(){
-   switch (tp_type){
-   case upper_bb:
+   switch (tp_type_long){
+   case bb:
       if(iOpen(asset, period, 1) > bbs_upper_buffer[1] &&
       iClose(asset, period, 1) < bbs_upper_buffer[1]){
          closeAllOrders();
@@ -154,7 +169,28 @@ void CheckExitLong(){
 
 // Check close short
 void CheckExitShort(){
-
+   switch (tp_type_short){
+      case bb:
+         if(iOpen(asset, period, 1) < bbs_lower_buffer[1] &&
+         iClose(asset, period, 1) > bbs_lower_buffer[1]){
+            closeAllOrders();
+         }
+         break;
+      case ema12:
+         if(iOpen(asset, period, 1) < ema12_buffer[1] &&
+         iClose(asset, period, 1) > ema12_buffer[1]){
+            closeAllOrders();
+         }
+         break;
+      case ema20:
+         if(iOpen(asset, period, 1) < ema20_buffer[1] &&
+         iClose(asset, period, 1) > ema20_buffer[1]){
+            closeAllOrders();
+         }
+         break;
+      default:
+         break;
+   }
 }
 
 // Check if last bar is completed, eg. new bar created
@@ -188,23 +224,32 @@ string CheckPositionOpen(){
 
 // Get TP of long position
 double GetTpLong(){
-   return(SymbolInfoDouble(asset, SYMBOL_ASK) + tp_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
+   return(SymbolInfoDouble(asset, SYMBOL_ASK) + long_tp_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
 }
 
 // Get SL of long position
 double GetSlLong(){
-   return(SymbolInfoDouble(asset, SYMBOL_ASK) - sl_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
+   if(sl_type == 1){
+      return(iLow(asset, Period(), iLowest(asset, Period(), MODE_LOW, sl_long_candles, 1)));
+   }
+   else{
+      return(SymbolInfoDouble(asset, SYMBOL_ASK) - long_sl_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
+   }
 }
 
 // Get TP of short position
 double GetTpShort(){
-   return(0);
+   return(SymbolInfoDouble(asset, SYMBOL_ASK) - short_tp_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
 }
 
 // Get SL of short position
 double GetSlShort(){
-   return(0);
-}
+   if(sl_type == 1){
+      return(iHigh(asset, Period(), iHighest(asset, Period(), MODE_LOW, sl_short_candles, 1)));
+   }
+   else{
+      return(SymbolInfoDouble(asset, SYMBOL_ASK) + short_sl_pips * SymbolInfoDouble(asset, SYMBOL_POINT));
+   }}
 
 // Close all the open orders and positions
 void closeAllOrders(){
@@ -307,7 +352,6 @@ int OnInit(){
 
    // Init indicators
    bbs_handle = iBands(asset, period, bbs_period, 0, bbs_std_dev, PRICE_CLOSE);
-   std_dev_handle = iStdDev(asset, period, std_dev_period, 0, MODE_SMA, PRICE_CLOSE);
    ema12_handle = iMA(asset, period, 12, 0, MODE_EMA, PRICE_CLOSE);
    ema20_handle = iMA(asset, period, 20, 0, MODE_EMA, PRICE_CLOSE);
 
@@ -319,43 +363,51 @@ int OnInit(){
 
 void OnTick(){
    if(isNewBar()){
-
       // Update indicators
       CopyBuffer(bbs_handle, 1, 0, 2, bbs_upper_buffer);
-      CopyBuffer(std_dev_handle, 0, 0, 2, std_dev_buffer);
+      CopyBuffer(bbs_handle, 2, 0, 2, bbs_lower_buffer);
 
-      switch(tp_type){
-         case ema12:
-            CopyBuffer(ema12_handle, 0, 0, 2, ema12_buffer);
-            break;
-         case ema20:
-            CopyBuffer(ema20_handle, 0, 0, 2, ema20_buffer);
-            break;
-         default:
-            break;
+      if(long_allowed){
+         switch(tp_type_long){
+            case ema12:
+               CopyBuffer(ema12_handle, 0, 0, 2, ema12_buffer);
+               break;
+            case ema20:
+               CopyBuffer(ema20_handle, 0, 0, 2, ema20_buffer);
+               break;
+            default:
+               break;
+         }
+      }
+
+      if(short_allowed){
+         switch(tp_type_short){
+            case ema12:
+               CopyBuffer(ema12_handle, 0, 0, 2, ema12_buffer);
+               break;
+            case ema20:
+               CopyBuffer(ema20_handle, 0, 0, 2, ema20_buffer);
+               break;
+            default:
+               break;
+         }     
       }
 
       if(CheckPositionOpen() == "none"){
-         if(long_allowed){
-            if(iOpen(asset, period, 1) < bbs_upper_buffer[1] &&
-            iClose(asset, period, 1) > bbs_upper_buffer[1]){
-               if(std_dev_allowed){
-                  if(std_dev_buffer[1] < max_std_dev_value){
-                     OpenLong("");
-                  }
-               }
-               else{
+         if(maximum_spread > SymbolInfoInteger(asset, SYMBOL_SPREAD)){
+            if(long_allowed){
+               if(iOpen(asset, period, 1) < bbs_upper_buffer[1] &&
+               iClose(asset, period, 1) > bbs_upper_buffer[1]){
                   OpenLong("");
                }
             }
-            
-         }
 
-         if(short_allowed){
-            // Check entries for short positions
-            if(1){
-               OpenShort("");
-            }
+            if(short_allowed){
+               if(iOpen(asset, period, 1) > bbs_lower_buffer[1] &&
+               iClose(asset, period, 1) < bbs_lower_buffer[1]){
+                  OpenShort("");
+               }
+            }  
          }
       }
 
@@ -370,12 +422,11 @@ void OnTick(){
             // Check TP
             CheckExitLong();
          }
+
          // Check exits for short positions
          if(CheckPositionOpen() == "short"){
             // Check TP
-            // if(1){
-            //    closeAllOrders();
-            // }
+            CheckExitShort();
          }
       }
    }
