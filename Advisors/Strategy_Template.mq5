@@ -89,16 +89,6 @@ void CloseOrder(){
    pos_ticket = 0;   
 }
 
-// Check close long
-void CheckExitLong(){
-
-}
-
-// Check close short
-void CheckExitShort(){
-
-}
-
 // Check if last bar is completed, eg. new bar created
 bool isNewBar(){
    int bars = iBars(asset, PERIOD_CURRENT);
@@ -126,26 +116,6 @@ string CheckPositionOpen(){
       }
    }
    return("error");
-}
-
-// Get TP of long position
-double GetTpLong(){
-   return(0);
-}
-
-// Get SL of long position
-double GetSlLong(){
-   return(0);
-}
-
-// Get TP of short position
-double GetTpShort(){
-   return(0);
-}
-
-// Get SL of short position
-double GetSlShort(){
-   return(0);
 }
 
 // Close all the open orders and positions
@@ -236,6 +206,46 @@ void CheckIfPartialClose(){
    }
 }
 
+// Get TP of long position
+double GetTpLong(){
+   return(0);
+}
+
+// Get SL of long position
+double GetSlLong(){
+   return(0);
+}
+
+// Get TP of short position
+double GetTpShort(){
+   return(0);
+}
+
+// Get SL of short position
+double GetSlShort(){
+   return(0);
+}
+
+// Check entry long
+void CheckEntryLong(){
+
+}
+
+// Check entry short
+void CheckEntryShort(){
+
+}
+
+// Check close long
+void CheckExitLong(){
+
+}
+
+// Check close short
+void CheckExitShort(){
+
+}
+
 int OnInit(){
    // If real account is not permitted, exit
    if(!live_trading_allowed) {
@@ -266,16 +276,12 @@ void OnTick(){
       if(CheckPositionOpen() == "none"){
          if(long_allowed){
             // Check entries for long positions
-            if(1){
-               OpenLong("");
-            }
+            CheckEntryLong();
          }
 
          if(short_allowed){
             // Check entries for short positions
-            if(1){
-               OpenShort("");
-            }
+            CheckEntryShort();
          }
       }
 
@@ -288,16 +294,13 @@ void OnTick(){
          // Check exits for long positions
          if(CheckPositionOpen() == "long"){
             // Check TP
-            if(1){
-               closeAllOrders();
-            }
+            CheckExitLong();
          }
+         
          // Check exits for short positions
          if(CheckPositionOpen() == "short"){
             // Check TP
-            if(1){
-               closeAllOrders();
-            }
+            CheckExitShort();
          }
       }
    }
