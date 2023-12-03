@@ -76,7 +76,7 @@ input int candles_sl_long = 6;                  // Amount of candles to get last
 input int candles_sl_short = 3;                 // Amount of candles to get last Min for Short SL
 input double partial_tp_ratio = 4.5;            // Ratio SL:TP of the partial exit
 input double partial_percentage = 75;           // Position size in % to reduce when partially closing
-input bool new_addition = false;
+
 // Open long position
 void OpenLong(string comment){
    double sl = GetSlLong();
@@ -105,11 +105,46 @@ void CloseOrder(){
    pos_ticket = 0;   
 }
 
-// Check close long
-void CheckExitLong(){}
+// Check for long entries
+void CheckEntryLong(){
+   if(ema_15_buffer_5m[1] > ema_30_buffer_5m[1] &&
+   ema_30_buffer_5m[1] > ema_65_buffer_5m[1] &&
+   ema_65_buffer_5m[1] > ema_200_buffer_5m[1] &&
+   ema_65_buffer_5m[2] < ema_200_buffer_5m[2]){
+      OpenLong("");
+   }
+}
+
+// Check for short entries
+void CheckEntryShort(){
+   if(ema_15_buffer_5m[1] < ema_30_buffer_5m[1] &&
+   ema_30_buffer_5m[1] < ema_65_buffer_5m[1] &&
+   ema_65_buffer_5m[1] < ema_200_buffer_5m[1] &&
+   ema_65_buffer_5m[2] > ema_200_buffer_5m[2]){
+      OpenShort("");
+   }
+}
 
 // Check close long
-void CheckExitShort(){}
+void CheckExitLong(){
+   if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
+      closeAllOrders();
+   }
+}
+
+// Check close long
+void CheckExitShort(){
+   if(iLow(asset, PERIOD_H1, 1) > ema_200_buffer_1h[1]){
+      if(ema_15_buffer_5m[1] > ema_30_buffer_5m[1]){
+         closeAllOrders();
+      }
+   }
+   else{
+      if(ema_15_buffer_5m[1] > ema_65_buffer_5m[1]){
+         closeAllOrders();
+      }
+   }
+}
 
 // Check if last bar is completed, eg. new bar created
 bool isNewBar(){
@@ -281,22 +316,12 @@ void OnTick(){
       if(CheckPositionOpen() == "none"){
          if(long_allowed){
             // Check for longs
-            if(ema_15_buffer_5m[1] > ema_30_buffer_5m[1] &&
-            ema_30_buffer_5m[1] > ema_65_buffer_5m[1] &&
-            ema_65_buffer_5m[1] > ema_200_buffer_5m[1] &&
-            ema_65_buffer_5m[2] < ema_200_buffer_5m[2]){
-               OpenLong("");
-            }
+            CheckEntryLong();
          }
 
          if(short_allowed){
             // Check for shorts
-            if(ema_15_buffer_5m[1] < ema_30_buffer_5m[1] &&
-            ema_30_buffer_5m[1] < ema_65_buffer_5m[1] &&
-            ema_65_buffer_5m[1] < ema_200_buffer_5m[1] &&
-            ema_65_buffer_5m[2] > ema_200_buffer_5m[2]){
-               OpenShort("");
-            }
+            CheckEntryShort();
          }
       }
 
@@ -307,24 +332,11 @@ void OnTick(){
          }
 
          if(CheckPositionOpen() == "long"){
-            // Check TP
-            if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
-               closeAllOrders();
-            }
+            CheckExitLong();
          }
 
          if(CheckPositionOpen() == "short"){
-            // Check TP
-            if(iLow(asset, PERIOD_H1, 1) > ema_200_buffer_1h[1]){
-               if(ema_15_buffer_5m[1] > ema_30_buffer_5m[1]){
-                  closeAllOrders();
-               }
-            }
-            else{
-               if(ema_15_buffer_5m[1] > ema_65_buffer_5m[1]){
-                  closeAllOrders();
-               }
-            }
+            CheckExitShort();
          }
       }
    }
