@@ -13,10 +13,16 @@ Asset: SPY
       - 5m EMA 65[2] < 5m EMA 200[2] 
 
    - TP
-      - 5m EMA 15[1] < 5m EMA 65[1]
+      - If (1h Low[1] > 1h EMA 100[1])
+         - 5m EMA X1[1] < 5m EMA X2[1]
+      - If (1h High[1] < 1h EMA 100[1])
+         - 5m EMA X3[1] < 5m EMA X4[1]
+      - If (1h High[1] > 1h EMA 100[1] &&
+            1h Low[1] < 1h EMA 100[1])
+         - 5m EMA X5[1] < 5m EMA X6[1]
 
    - SL
-      - Minimum of last X 5M candles
+      - Lowest of last X 5M candles
 
 - SHORT
    - Entry
@@ -24,14 +30,15 @@ Asset: SPY
       - 5m EMA 65[2] > 5m EMA 200[2] 
 
    - TP
-      - If 1h Min[1] > EMA 200[1]
-         - 5m EMA 15[1] > 5m EMA 30[1]
-      - Else
-         - 5m EMA 15[1] > 5m EMA 65[1]
-
+      - If (1h Low[1] > 1h EMA 100[1])
+         - 5m EMA X1[1] > 5m EMA X2[1]
+      - If (1h High[1] < 1h EMA 100[1])
+         - 5m EMA X3[1] > 5m EMA X4[1]
+      - If (1h High[1] > 1h EMA 100[1] &&
+            1h Low[1] < 1h EMA 100[1])
+         - 5m EMA X5[1] > 5m EMA X6[1]
    - SL
-      - Maximum of last X 5M candles
-
+      - Highest of last X 5M candles
 */
 
 #include <Trade/Trade.mqh>
@@ -56,13 +63,31 @@ int ema_15_handle_5m;
 int ema_30_handle_5m;
 int ema_65_handle_5m;
 int ema_200_handle_5m;
-int ema_200_handle_1h;
+int ema_100_handle_1h;
+int ema_tp_long_1_handle;
+int ema_tp_long_2_handle;
+int ema_tp_long_3_handle;
+int ema_tp_long_4_handle;
+int ema_tp_short_1_handle;
+int ema_tp_short_2_handle;
 
 double ema_15_buffer_5m[];
 double ema_30_buffer_5m[]; 
 double ema_65_buffer_5m[]; 
 double ema_200_buffer_5m[];
-double ema_200_buffer_1h[];
+double ema_100_buffer_1h[];
+double ema_tp_long_1_buffer[];
+double ema_tp_long_2_buffer[];
+double ema_tp_long_3_buffer[];
+double ema_tp_long_4_buffer[];
+double ema_tp_long_5_buffer[];
+double ema_tp_long_6_buffer[];
+double ema_tp_short_1_buffer[];
+double ema_tp_short_2_buffer[];
+double ema_tp_short_3_buffer[];
+double ema_tp_short_4_buffer[];
+double ema_tp_short_5_buffer[];
+double ema_tp_short_6_buffer[];
 
 // Static inputs
 sinput bool live_trading_allowed = false;       // Live trading allowed
@@ -76,6 +101,18 @@ input int candles_sl_long = 6;                  // Amount of candles to get last
 input int candles_sl_short = 3;                 // Amount of candles to get last Min for Short SL
 input double partial_tp_ratio = 4.5;            // Ratio SL:TP of the partial exit
 input double partial_percentage = 75;           // Position size in % to reduce when partially closing
+input int ema_tp_long_1_value = 10;             // TP Long 1
+input int ema_tp_long_2_value = 10;             // TP Long 2
+input int ema_tp_long_3_value = 10;             // TP Long 3
+input int ema_tp_long_4_value = 10;             // TP Long 4
+input int ema_tp_long_5_value = 10;             // TP Long 5
+input int ema_tp_long_6_value = 10;             // TP Long 6
+input int ema_tp_short_1_value = 10;            // TP Short 1
+input int ema_tp_short_2_value = 10;            // TP Short 2
+input int ema_tp_short_3_value = 10;            // TP Short 3
+input int ema_tp_short_4_value = 10;            // TP Short 4
+input int ema_tp_short_5_value = 10;            // TP Short 5
+input int ema_tp_short_6_value = 10;            // TP Short 6
 
 // Open long position
 void OpenLong(string comment){
@@ -127,15 +164,25 @@ void CheckEntryShort(){
 
 // Check close long
 void CheckExitLong(){
+   if(iLow(asset, PERIOD_H1, 1) > )
+
+
+
    if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
       closeAllOrders();
    }
 }
 
-// Check close long
-void CheckExitShort(){
-   if(iLow(asset, PERIOD_H1, 1) > ema_200_buffer_1h[1]){
-      if(ema_15_buffer_5m[1] > ema_30_buffer_5m[1]){
+// Check close short
+void CheckExitShort(){  
+   // TP
+   if(iLow(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1]){
+      if(ema_tp_short_1_buffer[1] > ema_tp_short_2_buffer[1]){
+         closeAllOrders();
+      }
+   }
+   if(iLow(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1]){
+      if(ema_tp_short_1_buffer[1] > ema_tp_short_2_buffer[1]){
          closeAllOrders();
       }
    }
@@ -182,7 +229,12 @@ double GetTpLong(){
 
 // Get SL of long position
 double GetSlLong(){
-   return(iLow(asset, Period(), iLowest(asset, Period(), MODE_LOW, candles_sl_long, 1)));
+   if(sl_ema_allowed_long){
+      return(0);
+   }
+   else{
+      return(iLow(asset, Period(), iLowest(asset, Period(), MODE_LOW, candles_sl_long, 1)));
+   }
 }
 
 double GetTpShort(){
@@ -191,7 +243,12 @@ double GetTpShort(){
 
 // Get SL of short position
 double GetSlShort(){
-   return(iHigh(asset, Period(), iHighest(asset, Period(), MODE_LOW, candles_sl_short, 1)));
+   if(sl_ema_allowed_short){
+      return(0);
+   }
+   else{
+      return(iHigh(asset, Period(), iHighest(asset, Period(), MODE_LOW, candles_sl_short, 1)));
+   }
 }
 
 void closeAllOrders(){
@@ -294,12 +351,16 @@ int OnInit(){
    ema_65_handle_5m = iMA(asset, period, 65, 0, MODE_EMA, PRICE_CLOSE);
    ema_200_handle_5m = iMA(asset, period, 200, 0, MODE_EMA, PRICE_CLOSE);
    ema_200_handle_1h = iMA(asset, PERIOD_H1, 200, 0, MODE_EMA, PRICE_CLOSE);
+   ema_sl_short_handle = iMA(asset, period, sl_ema_short_period, 0, MODE_EMA, PRICE_CLOSE);
+   ema_sl_long_handle = iMA(asset, period, sl_ema_long_period, 0, MODE_EMA, PRICE_CLOSE);
 
    ArraySetAsSeries(ema_15_buffer_5m, true);
    ArraySetAsSeries(ema_30_buffer_5m, true);
    ArraySetAsSeries(ema_65_buffer_5m, true);
    ArraySetAsSeries(ema_200_buffer_5m, true);
    ArraySetAsSeries(ema_200_buffer_1h, true);
+   ArraySetAsSeries(ema_sl_long_buffer, true);
+   ArraySetAsSeries(ema_sl_short_buffer, true);
 
    return(INIT_SUCCEEDED);
 }
@@ -312,6 +373,8 @@ void OnTick(){
       CopyBuffer(ema_65_handle_5m, 0, 0, 3, ema_65_buffer_5m);
       CopyBuffer(ema_200_handle_5m, 0, 0, 3, ema_200_buffer_5m);
       CopyBuffer(ema_200_handle_1h, 0, 0, 3, ema_200_buffer_1h);
+      CopyBuffer(ema_sl_long_handle, 0, 0, 3, ema_sl_long_buffer);
+      CopyBuffer(ema_sl_short_handle, 0, 0, 3, ema_sl_short_buffer);
 
       if(CheckPositionOpen() == "none"){
          if(long_allowed){
