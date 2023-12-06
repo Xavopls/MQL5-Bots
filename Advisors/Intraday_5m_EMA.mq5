@@ -5,6 +5,10 @@ These are coded in order to be able to compile the strategy.
 Appropiate inputs are obtained through backtesting and parameter optimization.
 ------------------------------------------------------------------------------
 
+TP: It needs to check the type of 1h candle in which the order has been executed
+It doesnt make much sense to check the current one for TP, maybe it does for pyramiding
+Check market. Also maybe check other 1h EMAs, even check other TFs.
+
 Asset: SPY
 
 - LONG
@@ -13,12 +17,20 @@ Asset: SPY
       - 5m EMA 65[2] < 5m EMA 200[2] 
 
    - TP
+
+      Mandatory condition: (X1 < X2, X3 < X4, X5 < X6)
+
       - If (1h Low[1] > 1h EMA 100[1])
+         - 5m EMA X1[2] > 5m EMA X2[2]
          - 5m EMA X1[1] < 5m EMA X2[1]
+
       - If (1h High[1] < 1h EMA 100[1])
+         - 5m EMA X3[2] > 5m EMA X4[2]
          - 5m EMA X3[1] < 5m EMA X4[1]
+
       - If (1h High[1] > 1h EMA 100[1] &&
             1h Low[1] < 1h EMA 100[1])
+         - 5m EMA X5[2] > 5m EMA X6[2]
          - 5m EMA X5[1] < 5m EMA X6[1]
 
    - SL
@@ -164,13 +176,30 @@ void CheckEntryShort(){
 
 // Check close long
 void CheckExitLong(){
-   if(iLow(asset, PERIOD_H1, 1) > )
-
-
-
-   if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
-      closeAllOrders();
+   if(iLow(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1]){
+      if(ema_tp_long_1_buffer[2] > ema_tp_long_2_buffer[2] &&
+      ema_tp_long_1_buffer[1] < ema_tp_long_2_buffer[1]){
+         CloseAllLongs();
+      }
    }
+
+   else if(iHigh(asset, PERIOD_H1, 1) < ema_100_buffer_1h[1]){
+      if(ema_tp_long_3_buffer[2] > ema_tp_long_4_buffer[2] &&
+      ema_tp_long_3_buffer[1] < ema_tp_long_4_buffer[1]){
+         CloseAllLongs();
+      }
+   }
+
+   else if(iHigh(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1] &&
+   iLow(asset, PERIOD_H1, 1) < ema_100_buffer_1h[1]){
+
+   }
+
+
+   // Old
+   // if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
+   //    closeAllOrders();
+   // }
 }
 
 // Check close short
@@ -273,6 +302,70 @@ void closeAllOrders(){
       if(position.SelectByIndex(i)){
          trade.PositionClose(position.Ticket()); 
          Sleep(100); 
+      }
+   }
+}
+
+ void CloseAllLongs(){
+// Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_BUY){
+            trade.PositionClose(position.Ticket());
+            Sleep(100);
+         }
+      }
+   }
+
+   // Close Orders
+   for(int i = OrdersTotal() - 1; i >= 0; i--){ 
+      if(order.SelectByIndex(i)){
+         if(order.OrderType() == ORDER_TYPE_BUY){
+            trade.OrderDelete(order.Ticket()); 
+            Sleep(100); 
+         }
+      }
+   }
+
+   // 2nd iteration of Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_BUY){
+            trade.PositionClose(position.Ticket());
+            Sleep(100);
+         }
+      }
+   }
+}
+
+ void CloseAllShorts(){
+// Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_SELL){
+            trade.PositionClose(position.Ticket());
+            Sleep(100);
+         }
+      }
+   }
+
+   // Close Orders
+   for(int i = OrdersTotal() - 1; i >= 0; i--){ 
+      if(order.SelectByIndex(i)){
+         if(order.OrderType() == ORDER_TYPE_SELL){
+            trade.OrderDelete(order.Ticket()); 
+            Sleep(100); 
+         }
+      }
+   }
+
+   // 2nd iteration of Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_SELL){
+            trade.PositionClose(position.Ticket());
+            Sleep(100);
+         }
       }
    }
 }
