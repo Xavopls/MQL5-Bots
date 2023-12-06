@@ -145,6 +145,72 @@ void closeAllOrders(){
    }
 }
 
+// Close all the open Long orders and Long positions
+void CloseAllLongs(){
+// Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_BUY){
+            trade.PositionClose(position.Ticket());
+            Sleep(100);
+         }
+      }
+   }
+
+   // Close Orders
+   for(int i = OrdersTotal() - 1; i >= 0; i--){ 
+      if(order.SelectByIndex(i)){
+         if(order.OrderType() == ORDER_TYPE_BUY){
+            trade.OrderDelete(order.Ticket()); 
+            Sleep(100); 
+         }
+      }
+   }
+
+   // 2nd iteration of Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_BUY){
+            trade.PositionClose(position.Ticket());
+            Sleep(100);
+         }
+      }
+   }
+}
+
+// Close all the open Short orders and Short positions
+void CloseAllShorts(){
+// Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_SELL){
+            trade.PositionClose(position.Ticket());
+            Sleep(100);
+         }
+      }
+   }
+
+   // Close Orders
+   for(int i = OrdersTotal() - 1; i >= 0; i--){ 
+      if(order.SelectByIndex(i)){
+         if(order.OrderType() == ORDER_TYPE_SELL){
+            trade.OrderDelete(order.Ticket()); 
+            Sleep(100); 
+         }
+      }
+   }
+
+   // 2nd iteration of Close Positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_SELL){
+            trade.PositionClose(position.Ticket());
+            Sleep(100);
+         }
+      }
+   }
+}
+
 // Check if account is real or demo
 bool isAccountReal(){
    CAccountInfo account;
