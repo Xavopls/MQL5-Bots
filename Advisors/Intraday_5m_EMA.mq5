@@ -5,10 +5,6 @@ These are coded in order to be able to compile the strategy.
 Appropiate inputs are obtained through backtesting and parameter optimization.
 ------------------------------------------------------------------------------
 
-TP: It needs to check the type of 1h candle in which the order has been executed
-It doesnt make much sense to check the current one for TP, maybe it does for pyramiding
-Check market. Also maybe check other 1h EMAs, even check other TFs.
-
 Asset: SPY
 
 - LONG
@@ -18,20 +14,25 @@ Asset: SPY
 
    - TP
 
-      Mandatory condition: (X1 < X2, X3 < X4, X5 < X6)
+      Mandatory condition: (X1 < X2, X3 < X4)
+      
+      (Up trend)
+      - If  (Entry candle) 1h Low > (Entry candle) 1h EMA 100 ||
+            ((Entry candle) 1h Low < (Entry candle) 1h EMA 100 && 
+            (Entry candle) 1h High > (Entry candle) 1h EMA 100 &&
+            (Entry candle) 1h Open < (Entry candle) 1h Close))
+             
+               - 5m EMA X1[2] > 5m EMA X2[2]
+               - 5m EMA X1[1] < 5m EMA X2[1]
 
-      - If (1h Low[1] > 1h EMA 100[1])
-         - 5m EMA X1[2] > 5m EMA X2[2]
-         - 5m EMA X1[1] < 5m EMA X2[1]
+      (Down trend)
+      - If  (Entry candle) 1h High < (Entry candle) 1h EMA 100 ||
+            ((Entry candle) 1h Low < (Entry candle) 1h EMA 100 && 
+            (Entry candle) 1h High > (Entry candle) 1h EMA 100 &&
+            (Entry candle) 1h Open > (Entry candle) 1h Close))
 
-      - If (1h High[1] < 1h EMA 100[1])
-         - 5m EMA X3[2] > 5m EMA X4[2]
-         - 5m EMA X3[1] < 5m EMA X4[1]
-
-      - If (1h High[1] > 1h EMA 100[1] &&
-            1h Low[1] < 1h EMA 100[1])
-         - 5m EMA X5[2] > 5m EMA X6[2]
-         - 5m EMA X5[1] < 5m EMA X6[1]
+               - 5m EMA X3[2] > 5m EMA X4[2]
+               - 5m EMA X3[1] < 5m EMA X4[1]
 
    - SL
       - Lowest of last X 5M candles
@@ -42,13 +43,25 @@ Asset: SPY
       - 5m EMA 65[2] > 5m EMA 200[2] 
 
    - TP
-      - If (1h Low[1] > 1h EMA 100[1])
-         - 5m EMA X1[1] > 5m EMA X2[1]
-      - If (1h High[1] < 1h EMA 100[1])
-         - 5m EMA X3[1] > 5m EMA X4[1]
-      - If (1h High[1] > 1h EMA 100[1] &&
-            1h Low[1] < 1h EMA 100[1])
-         - 5m EMA X5[1] > 5m EMA X6[1]
+      Mandatory condition: (X1 < X2, X3 < X4)
+      
+      (Up trend)
+      - If  (Entry candle) 1h Low > (Entry candle) 1h EMA 100 ||
+            ((Entry candle) 1h Low < (Entry candle) 1h EMA 100 && 
+            (Entry candle) 1h High > (Entry candle) 1h EMA 100 &&
+            (Entry candle) 1h Open < (Entry candle) 1h Close))
+             
+               - 5m EMA X1[2] > 5m EMA X2[2]
+               - 5m EMA X1[1] < 5m EMA X2[1]
+      
+      (Down trend)
+      - If  (Entry candle) 1h High < (Entry candle) 1h EMA 100 ||
+            ((Entry candle) 1h Low < (Entry candle) 1h EMA 100 && 
+            (Entry candle) 1h High > (Entry candle) 1h EMA 100 &&
+            (Entry candle) 1h Open > (Entry candle) 1h Close))
+
+               - 5m EMA X3[2] > 5m EMA X4[2]
+               - 5m EMA X3[1] < 5m EMA X4[1]
    - SL
       - Highest of last X 5M candles
 */
@@ -65,11 +78,14 @@ COrderInfo order;
 Utils utils;
 
 // Global variables
-string asset = Symbol();
-ENUM_TIMEFRAMES period = Period();
+string asset = "SPY";
+ENUM_TIMEFRAMES period = PERIOD_M5;
 bool async_trading_permitted = false;
 int bars_total;
+
 double partial_closed_tickets[];
+double uptrend_trades[];
+double downtrend_trades[];
 
 int ema_15_handle_5m;
 int ema_30_handle_5m;
@@ -92,14 +108,10 @@ double ema_tp_long_1_buffer[];
 double ema_tp_long_2_buffer[];
 double ema_tp_long_3_buffer[];
 double ema_tp_long_4_buffer[];
-double ema_tp_long_5_buffer[];
-double ema_tp_long_6_buffer[];
 double ema_tp_short_1_buffer[];
 double ema_tp_short_2_buffer[];
 double ema_tp_short_3_buffer[];
 double ema_tp_short_4_buffer[];
-double ema_tp_short_5_buffer[];
-double ema_tp_short_6_buffer[];
 
 // Static inputs
 sinput bool live_trading_allowed = false;       // Live trading allowed
@@ -109,22 +121,48 @@ sinput bool partial_exits_allowed = true;       // Partial exits allowed
 
 // Input variables
 input float equity_percentage_per_trade = 80;   // Equity percentage per trade
-input int candles_sl_long = 6;                  // Amount of candles to get last Min for Long SL
-input int candles_sl_short = 3;                 // Amount of candles to get last Min for Short SL
+input int candles_sl_long = 6;                  // Amount of candles to get last Low for Long SL
+input int candles_sl_short = 3;                 // Amount of candles to get last High for Short SL
 input double partial_tp_ratio = 4.5;            // Ratio SL:TP of the partial exit
 input double partial_percentage = 75;           // Position size in % to reduce when partially closing
-input int ema_tp_long_1_value = 10;             // TP Long 1
-input int ema_tp_long_2_value = 10;             // TP Long 2
-input int ema_tp_long_3_value = 10;             // TP Long 3
-input int ema_tp_long_4_value = 10;             // TP Long 4
-input int ema_tp_long_5_value = 10;             // TP Long 5
-input int ema_tp_long_6_value = 10;             // TP Long 6
-input int ema_tp_short_1_value = 10;            // TP Short 1
-input int ema_tp_short_2_value = 10;            // TP Short 2
-input int ema_tp_short_3_value = 10;            // TP Short 3
-input int ema_tp_short_4_value = 10;            // TP Short 4
-input int ema_tp_short_5_value = 10;            // TP Short 5
-input int ema_tp_short_6_value = 10;            // TP Short 6
+input int ema_x1_long = 10;                     // TP Long X1
+input int ema_x2_long = 10;                     // TP Long X2
+input int ema_x3_long = 10;                     // TP Long X3
+input int ema_x4_long = 10;                     // TP Long X4
+input int ema_x1_short = 10;                    // TP Short X1
+input int ema_x2_short = 10;                    // TP Short X2
+input int ema_x3_short = 10;                    // TP Short X3
+input int ema_x4_short = 10;                    // TP Short X4
+
+// Classifies the trade either if its uptrend or downtrend
+void ClassifyTrade(double ticket){
+   // Up trend
+   if(iLow(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1] ||
+   (iLow(asset, PERIOD_H1, 1) < ema_100_buffer_1h[1] &&
+   iHigh(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1] &&
+   iOpen(asset, PERIOD_H1, 1) < iClose(asset, PERIOD_H1, 1))){
+      ArrayResize(uptrend_trades, ArraySize(uptrend_trades) + 1);
+      ArrayFill(uptrend_trades, ArraySize(uptrend_trades)-1, 1, ticket);
+      // Set a buffer to not overload the array
+      if(ArraySize(uptrend_trades) > 10){
+         ArrayRemove(uptrend_trades, 0, 1);
+      }
+   }
+
+   // Down trend
+   if(iHigh(asset, PERIOD_H1, 1) < ema_100_buffer_1h[1] ||
+   (iLow(asset, PERIOD_H1, 1) < ema_100_buffer_1h[1] &&
+   iHigh(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1] &&
+   iOpen(asset, PERIOD_H1, 1) > iClose(asset, PERIOD_H1, 1))){
+      ArrayResize(downtrend_trades, ArraySize(downtrend_trades) + 1);
+      ArrayFill(downtrend_trades, ArraySize(downtrend_trades)-1, 1, ticket);
+      // Set a buffer to not overload the array
+      if(ArraySize(downtrend_trades) > 10){
+         ArrayRemove(downtrend_trades, 0, 1);
+      }
+   }
+}
+
 
 // Open long position
 void OpenLong(string comment){
@@ -134,6 +172,7 @@ void OpenLong(string comment){
    int size = utils.SharesToBuyPerMaxEquity(ask/5, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
    if(trade.Buy(size, asset, ask, sl, tp, comment)){
       pos_ticket = trade.ResultOrder();
+      ClassifyTrade(pos_ticket);
    }
 }
 
@@ -145,11 +184,12 @@ void OpenShort(string comment){
    int size = utils.SharesToBuyPerMaxEquity(bid/5, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
    if(trade.Sell(size, asset, bid, sl, 0, comment)){
       pos_ticket = trade.ResultOrder();
+      ClassifyTrade(pos_ticket);
    }
 }
 
-// Close position
-void CloseOrder(){
+// Close last position
+void CloseLastPosition(){
    trade.PositionClose(pos_ticket);
    pos_ticket = 0;   
 }
@@ -176,50 +216,12 @@ void CheckEntryShort(){
 
 // Check close long
 void CheckExitLong(){
-   if(iLow(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1]){
-      if(ema_tp_long_1_buffer[2] > ema_tp_long_2_buffer[2] &&
-      ema_tp_long_1_buffer[1] < ema_tp_long_2_buffer[1]){
-         CloseAllLongs();
-      }
-   }
-
-   else if(iHigh(asset, PERIOD_H1, 1) < ema_100_buffer_1h[1]){
-      if(ema_tp_long_3_buffer[2] > ema_tp_long_4_buffer[2] &&
-      ema_tp_long_3_buffer[1] < ema_tp_long_4_buffer[1]){
-         CloseAllLongs();
-      }
-   }
-
-   else if(iHigh(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1] &&
-   iLow(asset, PERIOD_H1, 1) < ema_100_buffer_1h[1]){
-
-   }
-
-
-   // Old
-   // if(ema_15_buffer_5m[1] < ema_65_buffer_5m[1]){
-   //    closeAllOrders();
-   // }
+   
 }
 
 // Check close short
 void CheckExitShort(){  
-   // TP
-   if(iLow(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1]){
-      if(ema_tp_short_1_buffer[1] > ema_tp_short_2_buffer[1]){
-         closeAllOrders();
-      }
-   }
-   if(iLow(asset, PERIOD_H1, 1) > ema_100_buffer_1h[1]){
-      if(ema_tp_short_1_buffer[1] > ema_tp_short_2_buffer[1]){
-         closeAllOrders();
-      }
-   }
-   else{
-      if(ema_15_buffer_5m[1] > ema_65_buffer_5m[1]){
-         closeAllOrders();
-      }
-   }
+   
 }
 
 // Check if last bar is completed, eg. new bar created
