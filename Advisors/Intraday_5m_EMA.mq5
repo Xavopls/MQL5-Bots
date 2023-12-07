@@ -14,7 +14,7 @@ Asset: SPY
 
    - TP
 
-      Mandatory condition: (X1 < X2, X3 < X4)
+      Mandatory conditions: (X1 < X2, X3 < X4)
       
       (Up trend)
       - If  (Entry candle) 1h Low > (Entry candle) 1h EMA 100 ||
@@ -43,7 +43,7 @@ Asset: SPY
       - 5m EMA 65[2] > 5m EMA 200[2] 
 
    - TP
-      Mandatory condition: (X1 < X2, X3 < X4)
+      Mandatory conditions: (X1 < X2, X3 < X4)
       
       (Up trend)
       - If  (Entry candle) 1h Low > (Entry candle) 1h EMA 100 ||
@@ -98,6 +98,8 @@ int ema_tp_long_3_handle;
 int ema_tp_long_4_handle;
 int ema_tp_short_1_handle;
 int ema_tp_short_2_handle;
+int ema_tp_short_3_handle;
+int ema_tp_short_4_handle;
 
 double ema_15_buffer_5m[];
 double ema_30_buffer_5m[]; 
@@ -163,7 +165,6 @@ void ClassifyTrade(double ticket){
    }
 }
 
-
 // Open long position
 void OpenLong(string comment){
    double sl = GetSlLong();
@@ -216,12 +217,79 @@ void CheckEntryShort(){
 
 // Check close long
 void CheckExitLong(){
-   
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_BUY){
+            switch (CheckTrend(position.Ticket())){
+               // Uptrend
+               case 1:
+                  if(ema_tp_long_1_buffer[2] > ema_tp_long_2_buffer[2] &&
+                     ema_tp_long_1_buffer[1] < ema_tp_long_2_buffer[1]){
+                        trade.PositionClose(position.Ticket());
+                  }
+                  break;
+
+               // Downtrend
+               case -1:
+                  if(ema_tp_long_3_buffer[2] > ema_tp_long_4_buffer[2] &&
+                     ema_tp_long_3_buffer[1] < ema_tp_long_4_buffer[1]){
+                        trade.PositionClose(position.Ticket());
+                  }
+                  break;
+
+               // N/A (Error)
+               case 0:
+                  break;
+            }
+         }
+      }
+   }
 }
 
 // Check close short
 void CheckExitShort(){  
-   
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_SELL){
+            switch (CheckTrend(position.Ticket())){
+               // Uptrend
+               case 1:
+                  if(ema_tp_short_1_buffer[2] > ema_tp_short_2_buffer[2] &&
+                     ema_tp_short_1_buffer[1] < ema_tp_short_2_buffer[1]){
+                        trade.PositionClose(position.Ticket());
+                  }
+                  break;
+
+               // Downtrend
+               case -1:
+                  if(ema_tp_short_3_buffer[2] > ema_tp_short_4_buffer[2] &&
+                     ema_tp_short_3_buffer[1] < ema_tp_short_4_buffer[1]){
+                        trade.PositionClose(position.Ticket());
+                  }
+                  break;
+
+               // N/A (Error)
+               case 0:
+                  break;
+            }
+         }
+      }
+   }
+}
+
+// 1: Uptrend, -1: Downtrend, 0 N/A (Error)
+int CheckTrend(double ticket){
+   for(int i = 0; i < ArraySize(uptrend_trades); i++){
+      if(ticket == uptrend_trades[i]){
+         return(1);
+      }
+   }
+   for(int i = 0; i < ArraySize(downtrend_trades); i++){
+      if(ticket == downtrend_trades[i]){
+         return(-1);
+      }
+   }
+   return(0);
 }
 
 // Check if last bar is completed, eg. new bar created
@@ -260,12 +328,7 @@ double GetTpLong(){
 
 // Get SL of long position
 double GetSlLong(){
-   if(sl_ema_allowed_long){
-      return(0);
-   }
-   else{
-      return(iLow(asset, Period(), iLowest(asset, Period(), MODE_LOW, candles_sl_long, 1)));
-   }
+   return(iLow(asset, Period(), iLowest(asset, Period(), MODE_LOW, candles_sl_long, 1)));
 }
 
 double GetTpShort(){
@@ -274,12 +337,7 @@ double GetTpShort(){
 
 // Get SL of short position
 double GetSlShort(){
-   if(sl_ema_allowed_short){
-      return(0);
-   }
-   else{
-      return(iHigh(asset, Period(), iHighest(asset, Period(), MODE_LOW, candles_sl_short, 1)));
-   }
+   return(iHigh(asset, Period(), iHighest(asset, Period(), MODE_LOW, candles_sl_short, 1)));
 }
 
 void closeAllOrders(){
@@ -372,6 +430,31 @@ void closeAllOrders(){
    }
 }
 
+// Returns true if longs are open
+bool AreLongsOpen(){
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_BUY){
+            return(true);
+         }
+      }
+   }
+   return(false);
+}
+
+// Returns true if shorts are open
+bool AreShortsOpen(){
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         if(position.PositionType() == POSITION_TYPE_SELL){
+            return(true);
+         }
+      }
+   }
+   return(false);
+}
+
+
 // Check is account is real or demo
 bool isAccountReal(){
    CAccountInfo account;
@@ -437,6 +520,20 @@ int OnInit(){
          return(-1);
       }
    }
+   // Check conditions for parameter opt
+   if(long_allowed){
+      if(ema_x1_long >= ema_x2_long ||
+      ema_x3_long >= ema_x4_long){
+         return(-1);
+      }
+   }
+
+   if(short_allowed){
+      if(ema_x1_short >= ema_x2_short ||
+      ema_x3_short >= ema_x4_short){
+         return(-1);
+      }
+   }
 
    // Async trades setup
    trade.SetAsyncMode(async_trading_permitted);
@@ -445,17 +542,31 @@ int OnInit(){
    ema_30_handle_5m = iMA(asset, period, 30, 0, MODE_EMA, PRICE_CLOSE);
    ema_65_handle_5m = iMA(asset, period, 65, 0, MODE_EMA, PRICE_CLOSE);
    ema_200_handle_5m = iMA(asset, period, 200, 0, MODE_EMA, PRICE_CLOSE);
-   ema_200_handle_1h = iMA(asset, PERIOD_H1, 200, 0, MODE_EMA, PRICE_CLOSE);
-   ema_sl_short_handle = iMA(asset, period, sl_ema_short_period, 0, MODE_EMA, PRICE_CLOSE);
-   ema_sl_long_handle = iMA(asset, period, sl_ema_long_period, 0, MODE_EMA, PRICE_CLOSE);
+   ema_100_handle_1h = iMA(asset, PERIOD_H1, 100, 0, MODE_EMA, PRICE_CLOSE);
+   
+   ema_tp_long_1_handle = iMA(asset, PERIOD_H1, ema_x1_long, 0, MODE_EMA, PRICE_CLOSE);
+   ema_tp_long_2_handle = iMA(asset, PERIOD_H1, ema_x2_long, 0, MODE_EMA, PRICE_CLOSE);
+   ema_tp_long_3_handle = iMA(asset, PERIOD_H1, ema_x3_long, 0, MODE_EMA, PRICE_CLOSE);
+   ema_tp_long_4_handle = iMA(asset, PERIOD_H1, ema_x4_long, 0, MODE_EMA, PRICE_CLOSE);
+
+   ema_tp_short_1_handle = iMA(asset, PERIOD_H1, ema_x1_short, 0, MODE_EMA, PRICE_CLOSE);
+   ema_tp_short_2_handle = iMA(asset, PERIOD_H1, ema_x2_short, 0, MODE_EMA, PRICE_CLOSE);
+   ema_tp_short_3_handle = iMA(asset, PERIOD_H1, ema_x3_short, 0, MODE_EMA, PRICE_CLOSE);
+   ema_tp_short_4_handle = iMA(asset, PERIOD_H1, ema_x4_short, 0, MODE_EMA, PRICE_CLOSE);
 
    ArraySetAsSeries(ema_15_buffer_5m, true);
    ArraySetAsSeries(ema_30_buffer_5m, true);
    ArraySetAsSeries(ema_65_buffer_5m, true);
    ArraySetAsSeries(ema_200_buffer_5m, true);
-   ArraySetAsSeries(ema_200_buffer_1h, true);
-   ArraySetAsSeries(ema_sl_long_buffer, true);
-   ArraySetAsSeries(ema_sl_short_buffer, true);
+   ArraySetAsSeries(ema_100_buffer_1h, true);
+   ArraySetAsSeries(ema_tp_long_1_buffer, true);
+   ArraySetAsSeries(ema_tp_long_2_buffer, true);
+   ArraySetAsSeries(ema_tp_long_3_buffer, true);
+   ArraySetAsSeries(ema_tp_long_4_buffer, true);
+   ArraySetAsSeries(ema_tp_short_1_buffer, true);
+   ArraySetAsSeries(ema_tp_short_2_buffer, true);
+   ArraySetAsSeries(ema_tp_short_3_buffer, true);
+   ArraySetAsSeries(ema_tp_short_4_buffer, true);
 
    return(INIT_SUCCEEDED);
 }
@@ -467,35 +578,36 @@ void OnTick(){
       CopyBuffer(ema_30_handle_5m, 0, 0, 3, ema_30_buffer_5m);
       CopyBuffer(ema_65_handle_5m, 0, 0, 3, ema_65_buffer_5m);
       CopyBuffer(ema_200_handle_5m, 0, 0, 3, ema_200_buffer_5m);
-      CopyBuffer(ema_200_handle_1h, 0, 0, 3, ema_200_buffer_1h);
-      CopyBuffer(ema_sl_long_handle, 0, 0, 3, ema_sl_long_buffer);
-      CopyBuffer(ema_sl_short_handle, 0, 0, 3, ema_sl_short_buffer);
+      CopyBuffer(ema_100_handle_1h, 0, 0, 3, ema_100_buffer_1h);
 
-      if(CheckPositionOpen() == "none"){
-         if(long_allowed){
-            // Check for longs
-            CheckEntryLong();
-         }
+      if(long_allowed){
+         CopyBuffer(ema_tp_long_1_handle, 0, 0, 3, ema_tp_long_1_buffer);
+         CopyBuffer(ema_tp_long_2_handle, 0, 0, 3, ema_tp_long_2_buffer);
+         CopyBuffer(ema_tp_long_3_handle, 0, 0, 3, ema_tp_long_3_buffer);
+         CopyBuffer(ema_tp_long_4_handle, 0, 0, 3, ema_tp_long_4_buffer);
 
-         if(short_allowed){
-            // Check for shorts
-            CheckEntryShort();
-         }
-      }
-
-      else {
-         // Check if any trade has reached the partial objective
-         if(partial_exits_allowed){
-            CheckIfPartialClose();
-         }
-
-         if(CheckPositionOpen() == "long"){
+         CheckEntryLong();
+         if(AreLongsOpen()){
             CheckExitLong();
          }
 
-         if(CheckPositionOpen() == "short"){
+      }
+
+      if(short_allowed){
+         CopyBuffer(ema_tp_short_1_handle, 0, 0, 3, ema_tp_short_1_buffer);
+         CopyBuffer(ema_tp_short_2_handle, 0, 0, 3, ema_tp_short_2_buffer);
+         CopyBuffer(ema_tp_short_3_handle, 0, 0, 3, ema_tp_short_3_buffer);
+         CopyBuffer(ema_tp_short_4_handle, 0, 0, 3, ema_tp_short_4_buffer);
+
+         CheckEntryShort();
+         if(AreShortsOpen()){
             CheckExitShort();
          }
+      }
+
+      // Check if any trade has reached the partial objective
+      if(partial_exits_allowed){
+         CheckIfPartialClose();
       }
    }
 }
