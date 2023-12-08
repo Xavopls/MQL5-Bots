@@ -6,6 +6,7 @@ Appropiate inputs are obtained through backtesting and parameter optimization.
 ------------------------------------------------------------------------------
 
 Asset: X
+Timeframe: Y
 
 - LONG
    - Entry
@@ -31,7 +32,7 @@ Asset: X
 
 #include <Trade/Trade.mqh>
 #include <Trade/AccountInfo.mqh>
-#include "../Libraries/Utils.mq5"
+#include "../../Libraries/Utils.mq5"
 
 CTrade trade;
 ulong pos_ticket;
