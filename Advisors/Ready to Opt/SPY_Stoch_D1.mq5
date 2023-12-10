@@ -53,9 +53,11 @@ double partial_closed_tickets[];
 
 int stoch_d1_handle;
 int ema_200_d1_handle;
+int ema_tp_long_d1_handle;
 
 double stoch_d1_buffer[];
 double ema_200_d1_buffer[];
+double ema_tp_long_d1_buffer[];
 
 // Static inputs
 sinput bool short_allowed = false;              // Short allowed
@@ -67,6 +69,9 @@ sinput bool live_trading_allowed = false;       // Live trading allowed
 input float equity_percentage_per_trade = 40;   // Equity percentage per trade
 input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial exit
 input double partial_percentage = 50;           // Position size in % to reduce when partially closing
+input int sl_candles_long = 5;                  // LONG SL Candles
+input double stoch_max_long = 20;               // LONG Stoch max value
+input int ema_tp_long = 20;                     // LONG TP EMA Value for TP 
 
 // This variable depends on the asset, must check
 int lots_per_unit = 5;
@@ -264,7 +269,7 @@ double GetTpLong(){
 
 // Get SL of long position
 double GetSlLong(){
-   return(0);
+   return(iLow(Symbol(), Period(), iLowest(Symbol(), Period(), MODE_LOW, sl_candles_long, 1)));
 }
 
 // Get TP of short position
@@ -280,8 +285,10 @@ double GetSlShort(){
 // Check entry long
 void CheckEntryLong(){
    // Check conditions for long orders
-   if(false){
-      OpenLong("");
+   if(stoch_d1_buffer[2] < stoch_max_long &&
+      stoch_d1_buffer[1] > stoch_d1_buffer[2] &&
+      iClose(asset, period, 1) > ema_200_d1_buffer[1]){
+         OpenLong("");
    }
 }
 
@@ -295,7 +302,10 @@ void CheckEntryShort(){
 
 // Check close long
 void CheckExitLong(){
-
+   if(iClose(asset, period, 1) < ema_tp_long_d1_buffer[1] &&
+      iOpen(asset, period, 1) > ema_tp_long_d1_buffer[1]){
+         CloseAllLongs();
+      }
 }
 
 // Check close short
@@ -341,9 +351,11 @@ int OnInit(){
    // Init indicators
    stoch_d1_handle = iStochastic(asset, period, 14, 3, 1, MODE_SMA, STO_LOWHIGH);
    ema_200_d1_handle = iMA(asset, period, 200, 0, MODE_EMA, PRICE_CLOSE);
+   ema_tp_long_d1_handle = iMA(asset, period, ema_tp_long, 0, MODE_EMA, PRICE_CLOSE);
 
    ArraySetAsSeries(stoch_d1_buffer, true);
    ArraySetAsSeries(ema_200_d1_buffer, true);
+   ArraySetAsSeries(ema_tp_long_d1_buffer, true);
 
    return(INIT_SUCCEEDED);
 }
@@ -361,6 +373,7 @@ void OnTick(){
          // Update Long indicators
          CopyBuffer(ema_200_d1_handle, 0, 0, 3, ema_200_d1_buffer);
          CopyBuffer(stoch_d1_handle, 1, 0, 3, stoch_d1_buffer);
+         CopyBuffer(ema_tp_long_d1_handle, 0, 0, 3, ema_tp_long_d1_buffer);
 
          // Check entry conditions for long orders
          CheckEntryLong();
