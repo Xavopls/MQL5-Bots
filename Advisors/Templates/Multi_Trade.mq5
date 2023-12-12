@@ -25,6 +25,7 @@ Timeframe: Y
      
 
 */
+
 #property version     "1.00" 
 #property link "https://github.com/Xavopls"
 #property copyright "Xavi Olivares"
@@ -68,7 +69,9 @@ input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial ex
 input double partial_percentage = 50;           // Position size in % to reduce when partially closing
 input TRAILING_STOP_TYPE ts_type = swing;       // Trailing stop type
 input int ts_swing_candles_long = 3;            // Swing TS Long Candles            
-input int ts_swing_candles_short = 3;            // Swing TS Short Candles            
+input int ts_swing_candles_short = 3;           // Swing TS Short Candles            
+input double ts_percentage_long = 5;            // Percentage TS Long value
+input double ts_percentage_short = 5;           // Percentage TS Short value
 
 // This variable depends on the asset, must check
 int lots_per_unit = 5;
@@ -273,12 +276,17 @@ double GetSlLong(){
          return(iLow(asset, period, iLowest(asset, period, MODE_LOW, ts_swing_candles_long, 1)));
          break;
       
+      case percentage:
+         return(iClose(asset, period, 1) * (1 - ts_percentage_long / 100));
+         break;
+      
       default:
          return(0);
          break;
       }
    }
    else{
+      // Add your custom SL here
       return(0);
    }
 }
@@ -297,12 +305,17 @@ double GetSlShort(){
          return(iHigh(asset, period, iHighest(asset, period, MODE_HIGH, ts_swing_candles_short, 1)));
          break;
       
+      case percentage:
+         return(iClose(asset, period, 1) * (1 + ts_percentage_short / 100));
+         break;
+
       default:
          return(0);
          break;
       }
    }
    else{
+      // Add your custom SL here
       return(0);
    }
 }
@@ -367,7 +380,7 @@ bool AreShortsOpen(){
    return(false);
 }
 
-// Swing TS method
+// Swing TS method (Last min or max within the last X candles)
 void TrailingStopSwing(){
    // Loop through open positions
    for(int i = PositionsTotal() - 1; i >= 0; i--){ 
@@ -392,7 +405,25 @@ void TrailingStopSwing(){
 
 // Price percentage TS method
 void TrailingStopPercentage(){
-
+   // Loop through open positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         // Long position open
+         if(position.PositionType() == POSITION_TYPE_BUY){
+            double new_sl = iClose(asset, period, 1) * (1 - ts_percentage_long / 100);
+            if(new_sl >= position.StopLoss()){
+               trade.PositionModify(position.Ticket(), new_sl, 0);
+            }          
+         }
+         // Short position open
+         if(position.PositionType() == POSITION_TYPE_SELL){
+            double new_sl = iClose(asset, period, 1) * (1 + ts_percentage_short / 100);
+            if(new_sl <= position.StopLoss()){
+               trade.PositionModify(position.Ticket(), new_sl, 0);
+            }    
+         }
+      }
+   }
 }
 
 // Price points (or pips) TS method
