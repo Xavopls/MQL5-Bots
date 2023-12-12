@@ -40,6 +40,14 @@ CPositionInfo position;
 COrderInfo order;
 Utils utils;
 
+enum TRAILING_STOP_TYPE {
+   swing,
+   percentage,
+   points,
+   volatility,
+   ema
+};
+
 // Global variables
 string asset = Symbol();
 ENUM_TIMEFRAMES period = Period();
@@ -52,11 +60,15 @@ sinput bool short_allowed = true;               // Short allowed
 sinput bool long_allowed = true;                // Long allowed
 sinput bool partial_exits_allowed = true;       // Partial exits allowed
 sinput bool live_trading_allowed = false;       // Live trading allowed
+sinput bool trailing_stop_allowed = false;      // Trailing stop allowed
 
 // Input variables
 input float equity_percentage_per_trade = 40;   // Equity percentage per trade
 input double partial_tp_ratio = 1.5;            // Ratio SL:TP of the partial exit
 input double partial_percentage = 50;           // Position size in % to reduce when partially closing
+input TRAILING_STOP_TYPE ts_type = swing;       // Trailing stop type
+input int ts_swing_candles_long = 3;            // Swing TS Long Candles            
+input int ts_swing_candles_short = 3;            // Swing TS Short Candles            
 
 // This variable depends on the asset, must check
 int lots_per_unit = 5;
@@ -254,7 +266,21 @@ double GetTpLong(){
 
 // Get SL of long position
 double GetSlLong(){
-   return(0);
+   if(trailing_stop_allowed){
+      switch (ts_type)
+      {
+      case swing:
+         return(iLow(asset, period, iLowest(asset, period, MODE_LOW, ts_swing_candles_long, 1)));
+         break;
+      
+      default:
+         return(0);
+         break;
+      }
+   }
+   else{
+      return(0);
+   }
 }
 
 // Get TP of short position
@@ -264,7 +290,21 @@ double GetTpShort(){
 
 // Get SL of short position
 double GetSlShort(){
-   return(0);
+   if(trailing_stop_allowed){
+      switch (ts_type)
+      {
+      case swing:
+         return(iHigh(asset, period, iHighest(asset, period, MODE_HIGH, ts_swing_candles_short, 1)));
+         break;
+      
+      default:
+         return(0);
+         break;
+      }
+   }
+   else{
+      return(0);
+   }
 }
 
 // Check entry long
@@ -285,12 +325,22 @@ void CheckEntryShort(){
 
 // Check close long
 void CheckExitLong(){
+   if(trailing_stop_allowed){
+      ModifyTrailingStop(ts_type);
+   }
+   else{
 
+   }
 }
 
 // Check close short
 void CheckExitShort(){
-
+   if(trailing_stop_allowed){
+      ModifyTrailingStop(ts_type);
+   }
+   else{
+      
+   }
 }
 
 // Returns true if longs are open
@@ -317,6 +367,77 @@ bool AreShortsOpen(){
    return(false);
 }
 
+// Swing TS method
+void TrailingStopSwing(){
+   // Loop through open positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         // Long position open
+         if(position.PositionType() == POSITION_TYPE_BUY){
+            double new_sl = iLow(asset, period, iLowest(asset, period, MODE_LOW, ts_swing_candles_long, 1));
+            if(new_sl >= position.StopLoss()){
+               trade.PositionModify(position.Ticket(), new_sl, 0);
+            }          
+         }
+         // Short position open
+         if(position.PositionType() == POSITION_TYPE_SELL){
+            double new_sl = iHigh(asset, period, iHighest(asset, period, MODE_HIGH, ts_swing_candles_short, 1));
+            if(new_sl <= position.StopLoss()){
+               trade.PositionModify(position.Ticket(), new_sl, 0);
+            }    
+         }
+      }
+   }
+}
+
+// Price percentage TS method
+void TrailingStopPercentage(){
+
+}
+
+// Price points (or pips) TS method
+void TrailingStopPoints(){
+
+}
+
+// Volatility using ATR TS method
+void TrailingStopVolatility(){
+
+}
+
+// EMA TS method
+void TrailingStopEMA(){
+
+}
+
+// Trailing stop update method
+void ModifyTrailingStop(TRAILING_STOP_TYPE type){
+   switch (type){
+      case swing:
+         TrailingStopSwing();
+         break;
+
+      case percentage:
+         TrailingStopPercentage();
+         break;
+
+      case points:
+         TrailingStopPoints();
+         break;
+
+      case volatility:
+         TrailingStopVolatility();
+         break;
+
+      case ema:
+         TrailingStopEMA();
+         break;
+
+      default:
+         break;
+   }
+}
+
 int OnInit(){
    // If real account is not permitted, exit
    if(!live_trading_allowed) {
@@ -338,7 +459,6 @@ int OnInit(){
 
 void OnTick(){
    if(isNewBar()){
-
       // Update generic indicators
       // --------
       // --------
