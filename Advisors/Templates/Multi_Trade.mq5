@@ -56,6 +56,14 @@ bool async_trading_permitted = false;
 int bars_total;
 double partial_closed_tickets[];
 
+// Trailing stop global variables
+int atr_ts_handle;
+double atr_ts_buffer[];
+int ema_long_ts_handle;
+int ema_short_ts_handle;
+double ema_long_ts_buffer[];
+double ema_short_ts_buffer[];
+
 // Static inputs
 sinput bool short_allowed = true;               // Short allowed
 sinput bool long_allowed = true;                // Long allowed
@@ -72,6 +80,8 @@ input int ts_swing_candles_long = 3;            // Swing TS Long Candles
 input int ts_swing_candles_short = 3;           // Swing TS Short Candles            
 input double ts_percentage_long = 5;            // Percentage TS Long value
 input double ts_percentage_short = 5;           // Percentage TS Short value
+input int ts_ema_long_value = 50;               // EMA TS Long period
+input int ts_ema_short_value = 50;              // EMA TS Short period
 
 // This variable depends on the asset, must check
 int lots_per_unit = 5;
@@ -280,6 +290,10 @@ double GetSlLong(){
          return(iClose(asset, period, 1) * (1 - ts_percentage_long / 100));
          break;
       
+      case ema:
+         CopyBuffer(ema_long_ts_handle, 0, 0, 2, ema_long_ts_buffer);
+         return(ema_long_ts_buffer[1]);
+
       default:
          return(0);
          break;
@@ -308,6 +322,10 @@ double GetSlShort(){
       case percentage:
          return(iClose(asset, period, 1) * (1 + ts_percentage_short / 100));
          break;
+
+      case ema:
+         CopyBuffer(ema_short_ts_handle, 0, 0, 2, ema_short_ts_buffer);
+         return(ema_short_ts_buffer[1]);
 
       default:
          return(0);
@@ -433,11 +451,40 @@ void TrailingStopPoints(){
 
 // Volatility using ATR TS method
 void TrailingStopVolatility(){
-
+   CopyBuffer(atr_ts_handle, 0, 0, 2, atr_ts_buffer);
+   /* 
+   ToDo
+      Design a formula that given the price and the atr returns a SL
+      Since the volatility and hence the ATR of every asset is radically different value wise, 
+      we have to check past data to get a fair range.
+   */
 }
 
-// EMA TS method
+// EMA TS method, must add an additional condition on entries, otherwise it won't work:
+// - For shorts: Close[1] < EMA Short
+// - For longs: Close[1] > EMA Long
 void TrailingStopEMA(){
+   if(long_allowed) CopyBuffer(ema_long_ts_handle, 0, 0, 2, ema_long_ts_buffer);
+   if(short_allowed) CopyBuffer(ema_short_ts_handle, 0, 0, 2, ema_short_ts_buffer);
+   // Loop through open positions
+   for(int i = PositionsTotal() - 1; i >= 0; i--){ 
+      if(position.SelectByIndex(i)){
+         // Long position open
+         if(position.PositionType() == POSITION_TYPE_BUY){
+            double new_sl = ema_long_ts_buffer[1];
+            if(new_sl >= position.StopLoss()){
+               trade.PositionModify(position.Ticket(), new_sl, 0);
+            }          
+         }
+         // Short position open
+         if(position.PositionType() == POSITION_TYPE_SELL){
+            double new_sl = ema_short_ts_buffer[1];
+            if(new_sl <= position.StopLoss()){
+               trade.PositionModify(position.Ticket(), new_sl, 0);
+            }    
+         }
+      }
+   }
 
 }
 
@@ -474,6 +521,21 @@ int OnInit(){
    if(!live_trading_allowed) {
       if(isAccountReal()){
          return(-1);
+      }
+   }
+
+   // Trailing Stop indicators
+   if(trailing_stop_allowed){
+      if(ts_type == volatility){
+         atr_ts_handle = iATR(asset, period, 14);
+         ArraySetAsSeries(atr_ts_buffer, true);
+      }
+
+      if(ts_type == ema){
+         ema_long_ts_handle = iMA(asset, period, ts_ema_long_value, 0, MODE_EMA, PRICE_CLOSE);
+         ema_short_ts_handle = iMA(asset, period, ts_ema_short_value, 0, MODE_EMA, PRICE_CLOSE);
+         ArraySetAsSeries(ema_long_ts_buffer, true);
+         ArraySetAsSeries(ema_short_ts_buffer, true);
       }
    }
 
