@@ -78,6 +78,8 @@ bool CheckLongRSI(){
    if(ArraySize(last_mins) == 3 && ArraySize(last_rsis_min) == 3){
       if(last_rsis_min[2] > last_rsis_min[1] && last_rsis_min[1] > last_rsis_min[0] &&
       last_mins[2] < last_mins[1] && last_mins[1] < last_mins[0]){
+         ArrayResize(last_rsis_min, 0);
+         ArrayResize(last_mins, 0);
          return(true);
       }
    }
@@ -90,6 +92,8 @@ bool CheckShortRSI(){
    if(ArraySize(last_maxs) == 3 && ArraySize(last_rsis_max) == 3){
       if(last_rsis_max[2] < last_rsis_max[1] && last_rsis_max[1] < last_rsis_max[0] &&
       last_maxs[2] > last_maxs[1] && last_maxs[1] > last_maxs[0]){
+         ArrayResize(last_rsis_max, 0);
+         ArrayResize(last_maxs, 0);
          return(true);
       }
    }
