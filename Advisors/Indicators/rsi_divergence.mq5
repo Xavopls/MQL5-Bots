@@ -20,11 +20,6 @@
 #property indicator_width2 2
 
 
-#property indicator_label2 "Short RSI Divergence"
-#property indicator_type2 DRAW_ARROW
-#property indicator_color2 clrRed
-#property indicator_width2 2
-
 //+------------------------------------------------------------------+
 //| Custom indicator initialization function                         |
 //+------------------------------------------------------------------+
