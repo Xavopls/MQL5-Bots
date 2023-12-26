@@ -516,6 +516,38 @@ void ModifyTrailingStop(TRAILING_STOP_TYPE type){
    }
 }
 
+void CheckAddPositionLong(){
+   if(false){
+      AddPositionLong("");
+   }
+}
+
+void AddPositionLong(string comment){
+   double sl = GetSlLong();
+   double tp = GetTpLong();
+   double ask = SymbolInfoDouble(asset, SYMBOL_ASK);
+   int size = utils.SharesToBuyPerMaxEquity(ask / lots_per_unit, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   if(trade.Buy(size, asset, ask, sl, tp, comment)){
+      pos_ticket = trade.ResultOrder();
+   }
+}
+
+void CheckAddPositionShort(){
+   if(false){
+      AddPositionShort("");
+   }
+}
+
+void AddPositionShort(string comment){
+   double sl = GetSlShort(); 
+   double tp = GetTpShort();
+   double bid = SymbolInfoDouble(asset, SYMBOL_BID);
+   int size = utils.SharesToBuyPerMaxEquity(bid / lots_per_unit, AccountInfoDouble(ACCOUNT_BALANCE), equity_percentage_per_trade);
+   if(trade.Sell(size, asset, bid, sl, 0, comment)){
+      pos_ticket = trade.ResultOrder();
+   }
+}
+
 int OnInit(){
    // If real account is not permitted, exit
    if(!live_trading_allowed) {
@@ -568,6 +600,8 @@ void OnTick(){
          CheckEntryLong();
          // Check if any long position is already open
          if(AreLongsOpen()){
+            // Check for add positions
+            CheckAddPositionLong();
             // Check if longs TPs reached
             CheckExitLong();
          }
@@ -583,6 +617,8 @@ void OnTick(){
          CheckEntryShort();
          // Check if any short position is already open
          if(AreShortsOpen()){
+            // Check for add positions
+            CheckAddPositionShort();
             // Check if shorts TPs reached
             CheckExitShort();
          }
